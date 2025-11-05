@@ -1,2 +1,2 @@
 # Zhang Lab
-Rotional project at KCL with Dr. Cheng Zhang
+Rotational project at KCL with Dr. Cheng Zhang
