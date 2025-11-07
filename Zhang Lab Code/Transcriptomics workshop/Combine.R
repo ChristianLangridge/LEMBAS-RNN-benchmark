@@ -101,7 +101,7 @@ write.table(res,file='/Users/christianlangridge/Desktop/Zhang Lab/Transcriptomic
 
 ### Functional analysis
   
-deseq_file = '~/Desktop/Zhang Lab/Transcriptomics workshop/deseq_1D.txt'
+deseq_file = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/deseq_1D.txt'
 deseq = read.csv(deseq_file,sep='\t',stringsAsFactors = F,row.names = 1)
 
 BiocManager::install("piano")
@@ -118,7 +118,7 @@ library('visNetwork')
 library('org.Mm.eg.db')
 library('AnnotationDbi')
 
-GSC='/Users/christianlangridge/Desktop/Zhang Lab/Transcriptomics workshop/KEGG.gmt'
+GSC='/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/KEGG.gmt'
 y=loadGSC(GSC)
 
 input_file=deseq[ ,c('log2FoldChange','pvalue')]
@@ -136,24 +136,27 @@ intersect(rownames(deseq),unlist(y$gsc))
 (head(rownames(deseq)))
 (head(unlist(y$gsc)))
 
-### Converting over deseq gene names (row names) over to same code as .gmt file
+### Converting over deseq gene names (row names) into ENSEMBL IDs
+ensembl_ids <- mapIds(
+  org.Mm.eg.db,
+  keys = gene_symbols,
+  column = "ENSEMBL",
+  keytype = "SYMBOL",
+  multiVals = "first"
+)
+rownames(deseq) <- ensembl_ids   
 
-# Remove everything after the dot
-de.ids <- gsub("\\..*$", "", rownames(deseq))
+### Same for y$gsc gene names 
+valid_symbols <- symbols[symbols %in% keys(org.Mm.eg.db, keytype = "SYMBOL")]
 
-library(org.Mm.eg.db) 
-symbols <- mapIds(org.Hs.eg.db,
-                  keys = de.ids,
-                  column = "SYMBOL",
-                  keytype = "ENSEMBL",
-                  multiVals = "first")
-
-rownames(deseq) <- symbols
-intersect(rownames(deseq), unlist(y$gsc))
-
+convert_symbols_to_ensembl <- function(symbols) {
+  symbols <- symbols[symbols %in% keys(org.Mm.eg.db, keytype = "SYMBOL")]
+  mapIds(org.Mm.eg.db, keys = symbols, column = "ENSEMBL", keytype = "SYMBOL", multiVals = "first")
+}
+gsc_ensembl <- lapply(y$gsc, convert_symbols_to_ensembl)
 
 ### Rechecking intersection of rownames
 
-intersect(rownames(deseq), unlist(y$gsc))
-
+intersect(rownames(deseq), unlist(gsc_ensembl)) 
+head(unlist(y$gsc))
 
