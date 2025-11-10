@@ -59,9 +59,9 @@ if (!requireNamespace("BiocManager", quietly = TRUE))
 BiocManager::install("DESeq2")
 library('DESeq2')
 
-metadata_file = '/Users/christianlangridge/Desktop/Zhang Lab/Transcriptomics workshop/metadata.txt' #adjust this based on your file location
+metadata_file = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/metadata.txt' #adjust this based on your file location
 metadata = read.csv(metadata_file,sep='\t',stringsAsFactors = F,row.names = 1)
-count_file = '/Users/christianlangridge/Desktop/Zhang Lab/Transcriptomics workshop/count_gn.txt' #adjust this based on your file location
+count_file = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/count_gn.txt' #adjust this based on your file location
 count = read.csv(count_file,sep='\t',stringsAsFactors = F,row.names = 1)[,rownames(metadata)] # make sure that sequence of metadata is the same with tpm
 
 conds=as.factor(metadata$condition)
@@ -137,13 +137,15 @@ intersect(rownames(deseq),unlist(y$gsc))
 (head(unlist(y$gsc)))
 
 ### Converting over deseq gene names (row names) into ENSEMBL IDs
-ensembl_ids <- mapIds(
-  org.Mm.eg.db,
-  keys = gene_symbols,
-  column = "ENSEMBL",
-  keytype = "SYMBOL",
-  multiVals = "first"
-)
+
+gene_symbols <- rownames(deseq)
+
+ensembl_ids <- mapIds(org.Mm.eg.db,
+                      keys = gene_symbols,     # gene_symbols is your vector of symbols
+                      column = "ENSEMBL",
+                      keytype = "SYMBOL",
+                      multiVals = "first")
+
 rownames(deseq) <- ensembl_ids   
 
 ### Same for y$gsc gene names 
@@ -154,6 +156,20 @@ convert_symbols_to_ensembl <- function(symbols) {
   mapIds(org.Mm.eg.db, keys = symbols, column = "ENSEMBL", keytype = "SYMBOL", multiVals = "first")
 }
 gsc_ensembl <- lapply(y$gsc, convert_symbols_to_ensembl)
+
+
+# Get all valid symbols from org.Mm.eg.db
+valid_keys <- keys(org.Mm.eg.db, keytype = "SYMBOL")
+
+# Function to filter each character vector
+filter_valid_symbols <- function(symbols) {
+  symbols[symbols %in% valid_keys]
+}
+
+# Apply over the gene set list
+filtered_gsc <- lapply(y$gsc, filter_valid_symbols)
+
+
 
 ### Rechecking intersection of rownames
 
