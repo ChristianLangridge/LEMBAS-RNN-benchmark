@@ -1,0 +1,119 @@
+result_dir = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results/KallistoResults' # The directory that includes the extracted folders
+
+count_tr = data.frame()
+tpm_tr = data.frame()
+
+for(i in list.dirs(result_dir,recursive=F)){
+  temp = read.csv(paste0(i,'/abundance.tsv'),sep='\t',stringsAsFactors = F)
+  temp_count = data.frame(temp$est_counts)
+  temp_tpm = data.frame(temp$tpm)
+  colnames(temp_count) = gsub(paste0(result_dir,"/"), "", i)
+  colnames(temp_tpm) = gsub(paste0(result_dir,"/"), "", i)
+  if(ncol(count_tr) == 0){
+    count_tr = temp_count
+    rownames(count_tr) = temp$target_id
+    tpm_tr = temp_tpm
+    rownames(tpm_tr) = temp$target_id
+  } else {
+    count_tr = cbind(count_tr, temp_count)
+    tpm_tr = cbind(tpm_tr,temp_tpm)
+  }
+}
+
+biomart_file = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Data/mart_export.txt' #adjust this based on your file location
+mapping = read.csv(biomart_file,sep='\t',stringsAsFactors = F,row.names = 1)
+
+count_gn = merge(count_tr,mapping['Gene.name'], by=0,all=F) # merge only for the shared row names
+count_gn = count_gn[,2:ncol(count_gn)]
+
+count_gn = aggregate(.~Gene.name, count_gn, sum)
+rownames(count_gn) = count_gn$Gene.name 
+
+
+tpm_gn = merge(tpm_tr,mapping['Gene.name'], by=0,all=F) # merge only for the shared row names
+tpm_gn = tpm_gn[,2:ncol(tpm_gn)]
+tpm_gn = aggregate(.~Gene.name, tpm_gn, sum)
+rownames(tpm_gn) = tpm_gn$Gene.name
+
+#Question: How many protein coding transcripts and genes that we have?
+#Answer: We have 14 protein coding transcripts/genes in the count_gn/tpm_gn datasets spanning all Kallisto results
+
+#Perform PCA on samples
+
+PCA=prcomp(t(tpm), scale=F)
+plot(PCA$x,pch = 15,col=c('blue','blue','red','red','lightgreen','lightgreen','black','black'))
+
+#Question: What do you think of the sample separations?
+#Answer: I believe these conditions each to be very distinct from one another,
+# with their respective tpm pattern being different enough 
+
+#Differential Expression Analysis
+
+library('DESeq2')
+conds=as.factor(metadata$condition)
+coldata <- data.frame(row.names=rownames(metadata),conds)
+dds <- DESeqDataSetFromMatrix(countData=round(as.matrix(count_gn)),colData=coldata,design=~conds)
+dds <- DESeq(dds)
+
+#Retrieving specific comparison results 
+
+cond1 = 'MI_1D' #First Condition
+cond2 = 'SHAM_1D' #Reference Condition
+res=results(dds,contrast=c('conds',cond1,cond2))
+res=data.frame(res)
+
+cond3 = 'SHAM_3D'#2nd reference condition
+res2=results(dds,contrast=c('conds',cond1,cond3))
+res2=data.frame(res2)
+
+#Save as a .tsv file for (MI_1D vs. SHAM_1D) and (MI_1D vs. SHAM_3D)
+
+write.table(res,file='/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results/deseq_1D.txt',sep = '\t', na = '',row.names = T,col.names=NA)
+write.table(res,file='/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results/deseq_3D.txt',sep = '\t', na = '',row.names = T,col.names=NA)
+
+#Comparing 1D results
+
+comparison_1D = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results/deseq_1D.txt'
+results_1D = read.csv(comparison_1D,sep='\t',stringsAsFactors = F,row.names = 1)
+
+#Question 1: With Adjusted P-value < 0.05, how many genes are significantly differentially up-regulated? down-regulated?
+#(HINT: Look at Log2FoldChange) What is the most affected gene? (HINT: sort it based on Adjusted P-Value) 
+#Answer:  genes are differentially expressed, 5481 are significantly differentially up-regulated 
+# and 2904 significantly differentially down-regulated. Asb2 is the most affected gene with the smallest adjusted p-value of 1.914458e-73.
+
+subset_results_pos <- results_1D[results_1D$log2FoldChange > 0 & results_1D$padj < 0.005, ]
+subset_results_neg <- results_1D[results_1D$log2FoldChange < 0 & results_1D$padj < 0.005, ]
+
+#Question 2: Why do we have several genes with NA in their statistical result?
+#Answer: A number of different genes have NA for stat results as they may be outlier genes 
+# or not have enough tpm count for a statistical analysis to be conducted. 
+
+#Functional analysis
+
+library('piano')
+library('Biobase')
+library('snow')
+library('RColorBrewer')
+library('gplots')
+library('visNetwork')
+
+GSC='/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Data/KEGG.gmt'
+y=loadGSC(GSC)
+
+input_file=results_1D[ ,c('log2FoldChange','pvalue')]
+logFC=as.matrix(input_file[,1])
+pval=as.matrix(input_file[,2])
+rownames(logFC)=toupper(rownames(input_file))
+rownames(pval)=toupper(rownames(input_file))
+logFC[is.na(logFC)] <- 0
+pval[is.na(pval)] <- 1
+gsaRes <- runGSA(pval,logFC,gsc=y, geneSetStat="reporter", signifMethod="nullDist", nPerm=1000)
+
+#Retrieve KEGG functional analysis as .tsv
+
+res_piano=GSAsummaryTable(gsaRes)
+
+#Visualize as pdf
+pdf("heatmap.pdf")
+hm = GSAheatmap(gsaRes, adjusted = T)
+dev.off()
