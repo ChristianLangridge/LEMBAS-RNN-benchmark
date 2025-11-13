@@ -1,4 +1,6 @@
-result_dir = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results/KallistoResults' # The directory that includes the extracted folders
+#Loading in data
+
+result_dir = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results/KallistoResults' 
 
 count_tr = data.frame()
 tpm_tr = data.frame()
@@ -20,29 +22,30 @@ for(i in list.dirs(result_dir,recursive=F)){
   }
 }
 
-biomart_file = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Data/mart_export.txt' #adjust this based on your file location
+biomart_file = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Data/mart_export.txt'
 mapping = read.csv(biomart_file,sep='\t',stringsAsFactors = F,row.names = 1)
-
 count_gn = merge(count_tr,mapping['Gene.name'], by=0,all=F) # merge only for the shared row names
 count_gn = count_gn[,2:ncol(count_gn)]
-
 count_gn = aggregate(.~Gene.name, count_gn, sum)
 rownames(count_gn) = count_gn$Gene.name 
-
-
 tpm_gn = merge(tpm_tr,mapping['Gene.name'], by=0,all=F) # merge only for the shared row names
 tpm_gn = tpm_gn[,2:ncol(tpm_gn)]
 tpm_gn = aggregate(.~Gene.name, tpm_gn, sum)
 rownames(tpm_gn) = tpm_gn$Gene.name
 
-count_gn$Gene.name <- NULL
-tpm_gn$Gene.name <- NULL
+write.table(count_gn,file='/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results/count_gene.txt',sep = '\t', na = '',row.names = F)
+write.table(tpm_gn,file='/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results/tpm_gene.txt',sep = '\t', na = '',row.names = F)
+
+metadata_file = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Data/metadata.txt'
+metadata = read.csv(metadata_file,sep='\t',stringsAsFactors = F,row.names = 1)
+
+tpm_file = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results/tpm_gene.txt'
+tpm = read.csv(tpm_file,sep='\t',stringsAsFactors = F,row.names = 1)[,rownames(metadata)]
 
 #Question: How many protein coding transcripts and genes that we have?
 #Answer: We have 14 protein coding transcripts/genes in the count_gn/tpm_gn datasets spanning all Kallisto results
 
-#Perform PCA on samples
-PCA=prcomp(t(tpm_gn), scale=T)
+PCA=prcomp(t(tpm), scale=F)
 plot(PCA$x,pch = 15,col=c('blue','blue','red','red','lightgreen','lightgreen','black','black'))
 
 #Question: What do you think of the sample separations?
@@ -51,10 +54,16 @@ plot(PCA$x,pch = 15,col=c('blue','blue','red','red','lightgreen','lightgreen','b
 
 #Differential Expression Analysis
 
+metadata_file = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Data/metadata.txt'
+metadata = read.csv(metadata_file,sep='\t',stringsAsFactors = F,row.names = 1)
+
+count_file = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results/count_gene.txt'
+count = read.csv(count_file,sep='\t',stringsAsFactors = F,row.names = 1)[,rownames(metadata)] # make sure that sequence of metadata is the same with tpm
+
 library('DESeq2')
 conds=as.factor(metadata$condition)
 coldata <- data.frame(row.names=rownames(metadata),conds)
-dds <- DESeqDataSetFromMatrix(countData=round(as.matrix(count_gn)),colData=coldata,design=~conds)
+dds <- DESeqDataSetFromMatrix(countData=round(as.matrix(count)),colData=coldata,design=~conds)
 dds <- DESeq(dds)
 
 #Retrieving specific comparison results 
@@ -80,17 +89,16 @@ results_1D = read.csv(comparison_1D,sep='\t',stringsAsFactors = F,row.names = 1)
 
 #Question 1: With Adjusted P-value < 0.05, how many genes are significantly differentially up-regulated? down-regulated?
 #(HINT: Look at Log2FoldChange) What is the most affected gene? (HINT: sort it based on Adjusted P-Value) 
-#Answer:  genes are differentially expressed, 5481 are significantly differentially up-regulated 
-# and 2904 significantly differentially down-regulated. Asb2 is the most affected gene with the smallest adjusted p-value of 1.914458e-73.
-
-subset_results_pos <- results_1D[results_1D$log2FoldChange > 0 & results_1D$padj < 0.005, ]
-subset_results_neg <- results_1D[results_1D$log2FoldChange < 0 & results_1D$padj < 0.005, ]
+#Answer:  3 genes are differentially expressed, 0 are significantly differentially up-regulated 
+# and 3 significantly differentially down-regulated. mt-Co3 is the most affected gene with the smallest adjusted p-value of 3.182828e-10.
 
 #Question 2: Why do we have several genes with NA in their statistical result?
-#Answer: A number of different genes have NA for stat results as they may be outlier genes 
-# or not have enough tpm count for a statistical analysis to be conducted. 
+#Answer: No genes have any NA values in their statistical result
 
 #Functional analysis
+
+deseq_file='/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results/deseq_1D.txt'
+deseq = read.csv(deseq_file,sep='\t',stringsAsFactors = F,row.names = 1)
 
 library('piano')
 library('Biobase')
@@ -102,7 +110,7 @@ library('visNetwork')
 GSC='/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Data/KEGG.gmt'
 y=loadGSC(GSC)
 
-input_file=results_1D[ ,c('log2FoldChange','pvalue')]
+input_file=deseq[ ,c('log2FoldChange','pvalue')]
 logFC=as.matrix(input_file[,1])
 pval=as.matrix(input_file[,2])
 rownames(logFC)=toupper(rownames(input_file))
@@ -110,12 +118,3 @@ rownames(pval)=toupper(rownames(input_file))
 logFC[is.na(logFC)] <- 0
 pval[is.na(pval)] <- 1
 gsaRes <- runGSA(pval,logFC,gsc=y, geneSetStat="reporter", signifMethod="nullDist", nPerm=1000)
-
-#Retrieve KEGG functional analysis as .tsv
-
-res_piano=GSAsummaryTable(gsaRes)
-
-#Visualize as pdf
-pdf("heatmap.pdf")
-hm = GSAheatmap(gsaRes, adjusted = T)
-dev.off()
