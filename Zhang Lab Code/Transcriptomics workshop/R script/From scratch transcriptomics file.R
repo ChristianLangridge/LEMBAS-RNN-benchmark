@@ -1,6 +1,6 @@
 #Loading in data
 
-result_dir = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results/KallistoResults' 
+result_dir = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results/KallistoResults2'
 
 count_tr = data.frame()
 tpm_tr = data.frame()
@@ -49,8 +49,7 @@ PCA=prcomp(t(tpm), scale=F)
 plot(PCA$x,pch = 15,col=c('blue','blue','red','red','lightgreen','lightgreen','black','black'))
 
 #Question: What do you think of the sample separations?
-#Answer: I believe these conditions each to be very distinct from one another,
-# with their respective tpm pattern being different enough 
+#Answer: 
 
 #Differential Expression Analysis
 
@@ -89,11 +88,10 @@ results_1D = read.csv(comparison_1D,sep='\t',stringsAsFactors = F,row.names = 1)
 
 #Question 1: With Adjusted P-value < 0.05, how many genes are significantly differentially up-regulated? down-regulated?
 #(HINT: Look at Log2FoldChange) What is the most affected gene? (HINT: sort it based on Adjusted P-Value) 
-#Answer:  3 genes are differentially expressed, 0 are significantly differentially up-regulated 
-# and 3 significantly differentially down-regulated. mt-Co3 is the most affected gene with the smallest adjusted p-value of 3.182828e-10.
+#Answer:  
 
 #Question 2: Why do we have several genes with NA in their statistical result?
-#Answer: No genes have any NA values in their statistical result
+#Answer: 
 
 #Functional analysis
 
@@ -118,3 +116,20 @@ rownames(pval)=toupper(rownames(input_file))
 logFC[is.na(logFC)] <- 0
 pval[is.na(pval)] <- 1
 gsaRes <- runGSA(pval,logFC,gsc=y, geneSetStat="reporter", signifMethod="nullDist", nPerm=1000)
+
+res_piano=GSAsummaryTable(gsaRes)
+
+pdf("heatmap.pdf") 
+hm = GSAheatmap(gsaRes, adjusted = T)
+dev.off()
+
+pdf('/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results/network_plot.pdf') 
+nw = networkPlot(gsaRes, class="distinct", direction="both",significance=0.00005, label="names")
+dev.off() 
+
+nw_int = networkPlot2(gsaRes, class="distinct", direction="both", significance=0.00005)
+#if you want to show it without saving in R, type "nw_int"
+visSave(nw_int, file = "network_plot_interactive.html", background = "white")
+
+
+
