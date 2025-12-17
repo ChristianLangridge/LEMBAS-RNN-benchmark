@@ -41,8 +41,56 @@ def set_publication_style():
         'ytick.major.size': 5,
     })
 
-# performance metrics for further analysis   
+# getting y_test and each model's y_pred  
 
+##### loading MLR model (v2), extracting mlr_y_pred
+mlr_model_path = "~/Zhang-Lab/Zhang Lab Data/Saved models/MLR/MLR_model_v2.joblib"
+reg_loaded = joblib.load(model_path)
+mlr_y_pred = reg_loaded.predict(x_test)          
+print(type(mlr_y_pred), mlr_y_pred.shape)
+
+##### loading XGBRF models (v1), extracting xgbrf_y_pred
+
+xgbrf_model_path = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Data/Saved models/Random Forest/Saved_Models_XGBRF_v2'
+
+# Find all saved models; ensure consistent order
+
+model_paths = sorted(glob.glob(os.path.join(model_dir, "target_*.json")))
+models = []
+for path in model_paths:
+    est = xgb.XGBRFRegressor(
+        objective='reg:squarederror',
+        random_state=42,
+        n_estimators=100,
+        max_depth=5,
+        device='cuda',
+        tree_method='hist'
+    )
+    est.load_model(path)
+    models.append(est)
+print(f"Loaded {len(models)} models from {model_dir}")
+
+xgbrf_y_pred = models.predict(x_test)          
+print(type(xgbrf_y_pred), xgbrf_y_pred.shape)
+
+
+predictions = {
+    "MLR": mlr_y_pred,
+    "XGBRFRegressor": xgbrf_y_pred,
+}
+
+
+
+
+
+
+
+
+
+
+
+
+# performance metrics for further analysis   
 def compute_metrics(y_true, y_pred):
     """
     Compute comprehensive performance metrics.
