@@ -13,6 +13,8 @@ from multiprocessing import Manager
 import optuna
 import glob
 
+##### loading and centering data
+
 # reading in full data files
 gene_expression = pd.read_csv(('/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0)
 tf_expression = pd.read_csv(('/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0)
@@ -30,31 +32,6 @@ x_train, x_temp, y_train, y_temp = train_test_split(
 x_test, x_val, y_test, y_val = train_test_split(
     x_temp, y_temp, test_size=1/3, random_state=42)
 
-#### centering script 
-
-# column-wise centering for training set (each gene is a column, each row is an instance)
-x_train_col_means = x_train.mean(axis=0)
-x_train_centered = x_train.subtract(x_train_col_means, axis=1)
-
-y_train_col_means = y_train.mean(axis=0)
-y_train_centered = y_train.subtract(y_train_col_means, axis=1)
-
-# for test set 
-x_test_col_means = x_test.mean(axis=0)
-x_test_centered = x_test.subtract(x_test_col_means, axis=1)
-
-y_test_col_means = y_test.mean(axis=0)
-y_test_centered = y_test.subtract(y_test_col_means, axis=1)
-
-# for val set
-x_val_col_means = x_val.mean(axis=0)
-x_val_centered = x_val.subtract(x_val_col_means, axis=1)
-
-y_val_col_means = y_val.mean(axis=0)
-y_val_centered = y_val.subtract(y_val_col_means, axis=1)
-
-
-### Converting into NumPy arrays
 # For training set
 x_train = x_train.to_numpy()
 y_train = y_train.to_numpy()
@@ -66,3 +43,21 @@ y_val = y_val.to_numpy()
 # For testing set
 x_test = x_test.to_numpy()
 y_test = y_test.to_numpy()
+
+###############################################################################################
+
+#### centering script 
+# column-wise centering for training set (each gene is a column, each row is an instance)
+x_train_col_means = x_train.mean(axis=0)
+x_train_centered = x_train - x_train_col_means
+
+y_train_col_means = y_train.mean(axis=0)
+y_train_centered = y_train - y_train_col_means
+
+# for test set 
+x_test_centered = x_test - x_train_col_means
+y_test_centered = y_test - y_train_col_means
+
+# for val set
+x_val_centered = x_val - x_train_col_means
+y_val_centered = y_val - y_train_col_means
