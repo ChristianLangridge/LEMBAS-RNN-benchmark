@@ -17,17 +17,9 @@ import glob
 gene_expression = pd.read_csv(('/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0)
 tf_expression = pd.read_csv(('/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0)
 
-# column-wise centering (each gene is a column, each row is an instance)
-gene_expression_col_means = gene_expression.mean(axis=0)
-gene_expression_centered = gene_expression.subtract(gene_expression_col_means, axis=1)
-
-tf_expression_col_means = tf_expression.mean(axis=0)
-tf_expression_centered = tf_expression.subtract(tf_expression_col_means, axis=1)
-
 # Split into training, testing and validation sets and into numpy arrays + combining dataframes
-x = tf_expression_centered
-y = gene_expression_centered
-
+x = tf_expression
+y = gene_expression
 combined_data = pd.concat([x, y], axis=1)
 
 # First split: 70% train and 30% temp (test + val)
@@ -49,3 +41,26 @@ y_val = y_val.to_numpy()
 # For testing set
 x_test = x_test.to_numpy()
 y_test = y_test.to_numpy()
+
+#### centering script 
+
+# column-wise centering for training set (each gene is a column, each row is an instance)
+x_train_col_means = x_train.mean(axis=0)
+x_train_centered = x_train.subtract(x_train_col_means, axis=1)
+
+y_train_col_means = y_train.mean(axis=0)
+y_train_centered = y_train.subtract(y_train_col_means, axis=1)
+
+# for test set 
+x_test_col_means = x_test.mean(axis=0)
+x_test_centered = x_test.subtract(x_test_col_means, axis=1)
+
+y_test_col_means = y_test.mean(axis=0)
+y_test_centered = y_test.subtract(y_test_col_means, axis=1)
+
+# for val set
+x_val_col_means = x_val.mean(axis=0)
+x_val_centered = x_val.subtract(x_val_col_means, axis=1)
+
+y_val_col_means = y_val.mean(axis=0)
+y_val_centered = y_val.subtract(y_val_col_means, axis=1)

@@ -11,6 +11,7 @@ import joblib
 import glob
 import os
 import xgboost as xgb
+from sklearn.model_selection  import test_train_split
 
 # configuration and utilities 
 # publication-style figure settings
@@ -45,45 +46,67 @@ def set_publication_style():
         'ytick.major.size': 5,
     })
 
+#####################################################################################
+
 ##### getting y_test and each model's y_pred  
 
-##### loading in centered data
+##### loading and centering data
+
 # reading in full data files
-gene_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0)
-tf_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0)
+gene_expression = pd.read_csv(('/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0)
+tf_expression = pd.read_csv(('/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0)
 
-# column-wise centering (each gene is a column, each row is an instance)
-gene_expression_col_means = gene_expression.mean(axis=0)
-gene_expression_centered = gene_expression.subtract(gene_expression_col_means, axis=1)
-
-tf_expression_col_means = tf_expression.mean(axis=0)
-tf_expression_centered = tf_expression.subtract(tf_expression_col_means, axis=1)
-
-# split into training, testing and validation sets and into numpy arrays + combining dataframes
-x = tf_expression_centered
-y = gene_expression_centered
-
+# Split into training, testing and validation sets and into numpy arrays + combining dataframes
+x = tf_expression
+y = gene_expression
 combined_data = pd.concat([x, y], axis=1)
 
-# first split: 70% train and 30% temp (test + val)
+# First split: 70% train and 30% temp (test + val)
 x_train, x_temp, y_train, y_temp = train_test_split(
     x, y, test_size=0.3, random_state=42)
 
-# second split: split the temp set into 20% test and 10% val (which is 2/3 and 1/3 of temp)
+# Second split: split the temp set into 20% test and 10% val (which is 2/3 and 1/3 of temp)
 x_test, x_val, y_test, y_val = train_test_split(
     x_temp, y_temp, test_size=1/3, random_state=42)
 
-# for training set
+# For training set
 x_train = x_train.to_numpy()
 y_train = y_train.to_numpy()
 
-# for validation set
+# For validation set
 x_val = x_val.to_numpy()
 y_val = y_val.to_numpy()
 
-# for testing set
+# For testing set
 x_test = x_test.to_numpy()
 y_test = y_test.to_numpy()
+
+###############################################################################################
+
+#### centering script 
+# column-wise centering for training set (each gene is a column, each row is an instance)
+x_train_col_means = x_train.mean(axis=0)
+x_train_centered = x_train.subtract(x_train_col_means, axis=1)
+
+y_train_col_means = y_train.mean(axis=0)
+y_train_centered = y_train.subtract(y_train_col_means, axis=1)
+
+# for test set 
+x_test_col_means = x_test.mean(axis=0)
+x_test_centered = x_test.subtract(x_test_col_means, axis=1)
+
+y_test_col_means = y_test.mean(axis=0)
+y_test_centered = y_test.subtract(y_test_col_means, axis=1)
+
+# for val set
+x_val_col_means = x_val.mean(axis=0)
+x_val_centered = x_val.subtract(x_val_col_means, axis=1)
+
+y_val_col_means = y_val.mean(axis=0)
+y_val_centered = y_val.subtract(y_val_col_means, axis=1)
+y_test = y_test.to_numpy()
+
+###############################################################################################
 
 ##### loading MLR model (v2), extracting mlr_y_pred
 mlr_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/MLR/MLR_v2/MLR_model_v2.joblib'
@@ -96,7 +119,7 @@ print(type(mlr_y_pred), mlr_y_pred.shape)
 xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/Random Forest/Saved_Models_XGBRF_v1.pkl'
 
 # find all saved models; ensure consistent order
-model_paths = sorted(glob.glob(os.path.join(model_dir, "target_*.json")))
+model_paths = sorted(glob.glob(os.path.join(xgbrf_model_path, "target_*.json")))
 models = []
 for path in model_paths:
     est = xgb.XGBRFRegressor(
@@ -109,10 +132,12 @@ for path in model_paths:
     )
     est.load_model(path)
     models.append(est)
-print(f"Loaded {len(models)} models from {model_dir}")
+print(f"Loaded {len(models)} models from {xgbrf_model_path}")
 
 xgbrf_y_pred = models.predict(x_test)          
 print(type(xgbrf_y_pred), xgbrf_y_pred.shape)
+
+####################################################################################################
 
 ##### assemble all y_pred into dictionary
 
@@ -149,3 +174,4 @@ def compute_metrics(y_true, y_pred):
         'rmse': rmse,
         'mae': mae
     }
+###############################################################################################
