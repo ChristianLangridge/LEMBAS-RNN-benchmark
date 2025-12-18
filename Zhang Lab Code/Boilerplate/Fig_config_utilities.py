@@ -11,8 +11,8 @@ import joblib
 import glob
 import os
 import xgboost as xgb
-from sklearn.model_selection  import train_test_split
 import pickle
+from sklearn.model_selection import train_test_split
 
 # configuration and utilities 
 # publication-style figure settings
@@ -60,8 +60,6 @@ tf_expression = pd.read_csv(('/home/christianl/Zhang-Lab/Zhang Lab Data/Full dat
 # Split into training, testing and validation sets and into numpy arrays + combining dataframes
 x = tf_expression
 y = gene_expression
-combined_data = pd.concat([x, y], axis=1)
-
 # First split: 70% train and 30% temp (test + val)
 x_train, x_temp, y_train, y_temp = train_test_split(
     x, y, test_size=0.3, random_state=42)
@@ -110,10 +108,11 @@ print(type(mlr_y_pred), mlr_y_pred.shape)
 
 ##### loading XGBRF models (v1)
 xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/Random Forest/Saved_Models_XGBRF_v1.pkl'
-# find all saved models, compute xgbrf_y_pred
+# find all saved models, compute xgbrf_y_pred (trained on uncentered data unlike MLR
+# so need to keep it as x_test to avoid destroying performance)
 with open(xgbrf_model_path, 'rb') as f:
     models = pickle.load(f)
-xgbrf_y_pred = np.column_stack([model.predict(x_test_centered) for model in models])
+xgbrf_y_pred = np.column_stack([model.predict(x_test) for model in models])
 
 ####################################################################################################
 
