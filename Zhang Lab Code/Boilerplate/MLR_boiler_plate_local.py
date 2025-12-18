@@ -30,18 +30,6 @@ x_train, x_temp, y_train, y_temp = train_test_split(
 x_test, x_val, y_test, y_val = train_test_split(
     x_temp, y_temp, test_size=1/3, random_state=42)
 
-# For training set
-x_train = x_train.to_numpy()
-y_train = y_train.to_numpy()
-
-# For validation set
-x_val = x_val.to_numpy()
-y_val = y_val.to_numpy()
-
-# For testing set
-x_test = x_test.to_numpy()
-y_test = y_test.to_numpy()
-
 #### centering script 
 
 # column-wise centering for training set (each gene is a column, each row is an instance)
@@ -64,3 +52,17 @@ x_val_centered = x_val.subtract(x_val_col_means, axis=1)
 
 y_val_col_means = y_val.mean(axis=0)
 y_val_centered = y_val.subtract(y_val_col_means, axis=1)
+
+
+### Converting into NumPy arrays
+# For training set
+x_train = x_train.to_numpy()
+y_train = y_train.to_numpy()
+
+# For validation set
+x_val = x_val.to_numpy()
+y_val = y_val.to_numpy()
+
+# For testing set
+x_test = x_test.to_numpy()
+y_test = y_test.to_numpy()

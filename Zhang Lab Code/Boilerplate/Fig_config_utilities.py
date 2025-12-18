@@ -11,7 +11,8 @@ import joblib
 import glob
 import os
 import xgboost as xgb
-from sklearn.model_selection  import test_train_split
+from sklearn.model_selection  import train_test_split
+import pickle
 
 # configuration and utilities 
 # publication-style figure settings
@@ -53,8 +54,8 @@ def set_publication_style():
 ##### loading and centering data
 
 # reading in full data files
-gene_expression = pd.read_csv(('/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0)
-tf_expression = pd.read_csv(('/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0)
+gene_expression = pd.read_csv(('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0)
+tf_expression = pd.read_csv(('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0)
 
 # Split into training, testing and validation sets and into numpy arrays + combining dataframes
 x = tf_expression
@@ -86,56 +87,33 @@ y_test = y_test.to_numpy()
 #### centering script 
 # column-wise centering for training set (each gene is a column, each row is an instance)
 x_train_col_means = x_train.mean(axis=0)
-x_train_centered = x_train.subtract(x_train_col_means, axis=1)
+x_train_centered = x_train - x_train_col_means
 
 y_train_col_means = y_train.mean(axis=0)
-y_train_centered = y_train.subtract(y_train_col_means, axis=1)
+y_train_centered = y_train - y_train_col_means
 
 # for test set 
-x_test_col_means = x_test.mean(axis=0)
-x_test_centered = x_test.subtract(x_test_col_means, axis=1)
-
-y_test_col_means = y_test.mean(axis=0)
-y_test_centered = y_test.subtract(y_test_col_means, axis=1)
+x_test_centered = x_test - x_train_col_means
+y_test_centered = y_test - y_train_col_means
 
 # for val set
-x_val_col_means = x_val.mean(axis=0)
-x_val_centered = x_val.subtract(x_val_col_means, axis=1)
-
-y_val_col_means = y_val.mean(axis=0)
-y_val_centered = y_val.subtract(y_val_col_means, axis=1)
-y_test = y_test.to_numpy()
+x_val_centered = x_val - x_train_col_means
+y_val_centered = y_val - y_train_col_means
 
 ###############################################################################################
 
 ##### loading MLR model (v2), extracting mlr_y_pred
 mlr_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/MLR/MLR_v2/MLR_model_v2.joblib'
 reg_loaded = joblib.load(mlr_model_path)
-mlr_y_pred = reg_loaded.predict(x_test)          
+mlr_y_pred = reg_loaded.predict(x_test_centered)          
 print(type(mlr_y_pred), mlr_y_pred.shape)
 
-##### loading XGBRF models (v1), extracting xgbrf_y_pred
-
+##### loading XGBRF models (v1)
 xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/Random Forest/Saved_Models_XGBRF_v1.pkl'
-
-# find all saved models; ensure consistent order
-model_paths = sorted(glob.glob(os.path.join(xgbrf_model_path, "target_*.json")))
-models = []
-for path in model_paths:
-    est = xgb.XGBRFRegressor(
-        objective='reg:squarederror',
-        random_state=42,
-        n_estimators=100,
-        max_depth=5,
-        device='cuda',
-        tree_method='hist'
-    )
-    est.load_model(path)
-    models.append(est)
-print(f"Loaded {len(models)} models from {xgbrf_model_path}")
-
-xgbrf_y_pred = models.predict(x_test)          
-print(type(xgbrf_y_pred), xgbrf_y_pred.shape)
+# find all saved models, compute xgbrf_y_pred
+with open(xgbrf_model_path, 'rb') as f:
+    models = pickle.load(f)
+xgbrf_y_pred = np.column_stack([model.predict(x_test_centered) for model in models])
 
 ####################################################################################################
 
@@ -146,26 +124,17 @@ predictions = {
     "XGBRFRegressor": xgbrf_y_pred,
 }
 
-# performance metrics for further analysis   
+# performance metrics, globally and at per-gene resolution, for further analysis  
+
 def compute_metrics(y_true, y_pred):
-    """
-    Compute comprehensive performance metrics.
+    """Compute metrics on flattened data."""
+    y_true_flat = y_true.flatten()
+    y_pred_flat = y_pred.flatten()
     
-    Parameters
-    ----------
-    y_true : array-like
-        Observed expression values
-    y_pred : array-like
-        Predicted expression values
-    
-    Returns
-    -------
-    dict : Dictionary containing RÂ², RMSE, MAE, Pearson r, and p-value
-    """
-    pearson_r, p_value = pearsonr(y_true, y_pred)
-    r2 = r2_score(y_true, y_pred)
-    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-    mae = mean_absolute_error(y_true, y_pred)
+    pearson_r, p_value = pearsonr(y_true_flat, y_pred_flat)
+    r2 = r2_score(y_true_flat, y_pred_flat)
+    rmse = np.sqrt(mean_squared_error(y_true_flat, y_pred_flat))
+    mae = mean_absolute_error(y_true_flat, y_pred_flat)
     
     return {
         'r2': r2,
@@ -174,4 +143,31 @@ def compute_metrics(y_true, y_pred):
         'rmse': rmse,
         'mae': mae
     }
+
+def compute_metrics_per_gene(y_true, y_pred):
+    """Compute metrics for each gene separately (recommended for multi-output)."""
+    n_genes = y_true.shape[1]
+    results = []
+    
+    for gene_idx in range(n_genes):
+        y_t = y_true[:, gene_idx]
+        y_p = y_pred[:, gene_idx]
+        
+        # Skip genes with no variance
+        if np.var(y_t) > 1e-10:
+            pearson_r, p_value = pearsonr(y_t, y_p)
+            r2 = r2_score(y_t, y_p)
+            rmse = np.sqrt(mean_squared_error(y_t, y_p))
+            mae = mean_absolute_error(y_t, y_p)
+            
+            results.append({
+                'gene_idx': gene_idx,
+                'r2': r2,
+                'pearson_r': pearson_r,
+                'p_value': p_value,
+                'rmse': rmse,
+                'mae': mae
+            })
+    
+    return pd.DataFrame(results)
 ###############################################################################################
