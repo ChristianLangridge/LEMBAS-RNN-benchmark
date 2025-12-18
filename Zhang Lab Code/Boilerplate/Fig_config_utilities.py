@@ -7,6 +7,10 @@ from scipy.stats import pearsonr, spearmanr, linregress
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import warnings
 warnings.filterwarnings('ignore')
+import joblib 
+import glob
+import os
+import xgboost as xgb
 
 # configuration and utilities 
 # publication-style figure settings
@@ -41,20 +45,57 @@ def set_publication_style():
         'ytick.major.size': 5,
     })
 
-# getting y_test and each model's y_pred  
+##### getting y_test and each model's y_pred  
+
+##### loading in centered data
+# reading in full data files
+gene_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0)
+tf_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0)
+
+# column-wise centering (each gene is a column, each row is an instance)
+gene_expression_col_means = gene_expression.mean(axis=0)
+gene_expression_centered = gene_expression.subtract(gene_expression_col_means, axis=1)
+
+tf_expression_col_means = tf_expression.mean(axis=0)
+tf_expression_centered = tf_expression.subtract(tf_expression_col_means, axis=1)
+
+# split into training, testing and validation sets and into numpy arrays + combining dataframes
+x = tf_expression_centered
+y = gene_expression_centered
+
+combined_data = pd.concat([x, y], axis=1)
+
+# first split: 70% train and 30% temp (test + val)
+x_train, x_temp, y_train, y_temp = train_test_split(
+    x, y, test_size=0.3, random_state=42)
+
+# second split: split the temp set into 20% test and 10% val (which is 2/3 and 1/3 of temp)
+x_test, x_val, y_test, y_val = train_test_split(
+    x_temp, y_temp, test_size=1/3, random_state=42)
+
+# for training set
+x_train = x_train.to_numpy()
+y_train = y_train.to_numpy()
+
+# for validation set
+x_val = x_val.to_numpy()
+y_val = y_val.to_numpy()
+
+# for testing set
+x_test = x_test.to_numpy()
+y_test = y_test.to_numpy()
 
 ##### loading MLR model (v2), extracting mlr_y_pred
-mlr_model_path = "~/Zhang-Lab/Zhang Lab Data/Saved models/MLR/MLR_model_v2.joblib"
-reg_loaded = joblib.load(model_path)
+mlr_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/MLR/MLR_v2/MLR_model_v2.joblib'
+reg_loaded = joblib.load(mlr_model_path)
 mlr_y_pred = reg_loaded.predict(x_test)          
 print(type(mlr_y_pred), mlr_y_pred.shape)
 
 ##### loading XGBRF models (v1), extracting xgbrf_y_pred
 
-xgbrf_model_path = '/Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Data/Saved models/Random Forest/Saved_Models_XGBRF_v2'
+xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/Random Forest/Saved_Models_XGBRF_v1.pkl'
 
-# Find all saved models; ensure consistent order
-
+# find all saved models; ensure consistent order
 model_paths = sorted(glob.glob(os.path.join(model_dir, "target_*.json")))
 models = []
 for path in model_paths:
@@ -73,22 +114,12 @@ print(f"Loaded {len(models)} models from {model_dir}")
 xgbrf_y_pred = models.predict(x_test)          
 print(type(xgbrf_y_pred), xgbrf_y_pred.shape)
 
+##### assemble all y_pred into dictionary
 
 predictions = {
     "MLR": mlr_y_pred,
     "XGBRFRegressor": xgbrf_y_pred,
 }
-
-
-
-
-
-
-
-
-
-
-
 
 # performance metrics for further analysis   
 def compute_metrics(y_true, y_pred):
