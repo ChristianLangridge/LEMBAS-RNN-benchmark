@@ -109,10 +109,11 @@ print(type(mlr_y_pred), mlr_y_pred.shape)
 ##### loading XGBRF models (v1)
 xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/Random Forest/Saved_Models_XGBRF_v1.pkl'
 # find all saved models, compute xgbrf_y_pred (trained on uncentered data unlike MLR
-# so need to keep it as x_test to avoid destroying performance)
+# so need to keep it as x_test to avoid destroying performance) --> ultimately decided 
+# to universally use centered data and just retrain XGBRFRegressor() on x_test_centered
 with open(xgbrf_model_path, 'rb') as f:
     models = pickle.load(f)
-xgbrf_y_pred = np.column_stack([model.predict(x_test) for model in models])
+xgbrf_y_pred = np.column_stack([model.predict(x_test_centered) for model in models])
 
 ####################################################################################################
 
@@ -127,8 +128,8 @@ predictions = {
 
 def compute_metrics(y_true, y_pred):
     """Compute metrics on flattened data."""
-    y_true_flat = y_true.flatten()
-    y_pred_flat = y_pred.flatten()
+    y_true_flat = y_true.ravel()
+    y_pred_flat = y_pred.ravel()
     
     pearson_r, p_value = pearsonr(y_true_flat, y_pred_flat)
     r2 = r2_score(y_true_flat, y_pred_flat)
