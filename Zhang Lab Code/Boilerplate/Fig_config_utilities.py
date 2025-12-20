@@ -110,21 +110,24 @@ print(type(mlr_y_pred), mlr_y_pred.shape)
 xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/Random Forest/Saved_Models_XGBRF_v1.pkl'
 # find all saved models, compute xgbrf_y_pred (trained on uncentered data unlike MLR
 # so need to keep it as x_test to avoid destroying performance) --> ultimately decided 
-# to universally use centered data and just retrain XGBRFRegressor() on x_test_centered
+# to universally use centered data and just retrain XGBRFRegressor() on x_test_centered (19/12/25)
 with open(xgbrf_model_path, 'rb') as f:
     models = pickle.load(f)
 xgbrf_y_pred = np.column_stack([model.predict(x_test_centered) for model in models])
 
 ####################################################################################################
 
-##### assemble all y_pred into dictionary
+##### assemble all y_pred into dictionary, where values are 2D numpy arrays
 
 predictions = {
     "MLR": mlr_y_pred,
     "XGBRFRegressor": xgbrf_y_pred,
 }
 
-# performance metrics, globally and at per-gene resolution, for further analysis  
+####################################################################################################
+
+# performance metrics, globally, for further analysis  
+# flattens 2D numpy arrays into 1D arrays where each gene is treated equally
 
 def compute_metrics(y_true, y_pred):
     """Compute metrics on flattened data."""
@@ -143,11 +146,15 @@ def compute_metrics(y_true, y_pred):
         'rmse': rmse,
         'mae': mae
     }
-
+    
+# same as computer_metrics, but at per-gene resolution
 def compute_metrics_per_gene(y_true, y_pred):
     """Compute metrics for each gene separately (recommended for multi-output)."""
     n_genes = y_true.shape[1]
     results = []
+    
+    y_true = y_true.ravel()
+    y_pred = y_pred.ravel()
     
     for gene_idx in range(n_genes):
         y_t = y_true[:, gene_idx]
@@ -170,4 +177,70 @@ def compute_metrics_per_gene(y_true, y_pred):
             })
     
     return pd.DataFrame(results)
-###############################################################################################
+
+
+####################################################################################################
+
+# using median r2 as a way of tracking model performance in a way more robust to specific
+# genes with outlying variance (ie. odd predictions)
+# median R² vs flattened R²
+def quick_r2_comparison(y_true, y_pred, model_name="Model"):
+    """
+    Quick comparison of flattened vs median per-gene R².
+    """
+    # flattened R²
+    r2_flattened = r2_score(y_true.ravel(), y_pred.ravel())
+    
+    # per-gene R²
+    n_genes = y_true.shape[1]
+    r2_per_gene = []
+    variances = []
+    
+    for gene_idx in range(n_genes):
+        y_t = y_true[:, gene_idx]
+        y_p = y_pred[:, gene_idx]
+        variance = np.var(y_t)
+        
+        if variance > 1e-10:
+            r2 = r2_score(y_t, y_p)
+            r2_per_gene.append(r2)
+            variances.append(variance)
+    
+    r2_per_gene = np.array(r2_per_gene)
+    variances = np.array(variances)
+    
+    # median R²
+    r2_median = np.median(r2_per_gene)
+    
+    # variance-weighted R² (score.() behaviour)
+    r2_weighted = np.sum(r2_per_gene * variances) / np.sum(variances)
+    
+    # correlation between variance and R²
+    corr = np.corrcoef(variances, r2_per_gene)[0, 1]
+    
+    print(f"\n{'='*60}")
+    print(f"{model_name} - R² Comparison")
+    print(f"{'='*60}")
+    print(f"Flattened R² (pooled):           {r2_flattened:.6f}")
+    print(f"Median R² (per-gene):            {r2_median:.6f}")
+    print(f"Weighted R² (sklearn .score()):  {r2_weighted:.6f}")
+    print(f"\nDifferences:")
+    print(f"Flattened - Median:              {r2_flattened - r2_median:+.6f}")
+    print(f"Weighted - Median:               {r2_weighted - r2_median:+.6f}")
+    print(f"\nVariance-R² correlation:         {corr:+.4f}")
+    if corr > 0.1:
+        print(f"→ Model performs BETTER on high-variance genes")
+    elif corr < -0.1:
+        print(f"→ Model performs BETTER on low-variance genes")
+    else:
+        print(f"→ Model performance is independent of gene variance")
+    print(f"{'='*60}\n")
+    
+    return {
+        'flattened': r2_flattened,
+        'median': r2_median,
+        'weighted': r2_weighted,
+        'corr': corr
+    }
+
+####################################################################################################
