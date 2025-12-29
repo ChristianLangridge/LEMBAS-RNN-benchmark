@@ -102,18 +102,26 @@ y_val_centered = y_val - y_train_col_means
 
 ##### loading MLR model (v2), extracting mlr_y_pred
 mlr_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/MLR/MLR_v2/MLR_model_v2.joblib'
-reg_loaded = joblib.load(mlr_model_path)
-mlr_y_pred = reg_loaded.predict(x_test_centered)          
+mlr_loaded = joblib.load(mlr_model_path)
+mlr_y_pred = mlr_loaded.predict(x_test_centered)          
 print(type(mlr_y_pred), mlr_y_pred.shape)
 
 ##### loading XGBRF models (v1)
-xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/Random Forest/Saved_Models_XGBRF_v1.pkl'
+#xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/Random Forest/Saved_Models_XGBRF_v1.pkl'
 # find all saved models, compute xgbrf_y_pred (trained on uncentered data unlike MLR
 # so need to keep it as x_test to avoid destroying performance) --> ultimately decided 
 # to universally use centered data and just retrain XGBRFRegressor() on x_test_centered (19/12/25)
-with open(xgbrf_model_path, 'rb') as f:
-    models = pickle.load(f)
-xgbrf_y_pred = np.column_stack([model.predict(x_test_centered) for model in models])
+#with open(xgbrf_model_path, 'rb') as f:
+#    models = pickle.load(f)
+#xgbrf_y_pred = np.column_stack([model.predict(x_test_centered) for model in models])
+
+##### loading XGBRF models (v3, trained on centered data)
+xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/XGBRF/model_multioutput_v3.joblib'
+xgbrf_loaded = joblib.load(mlr_model_path)
+xgbrf_y_pred = xgbrf_loaded.predict(x_test_centered)          
+print(type(xgbrf_y_pred), xgbrf_y_pred.shape)
+
+
 
 ####################################################################################################
 
