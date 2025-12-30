@@ -157,12 +157,9 @@ def compute_metrics(y_true, y_pred):
     
 # same as computer_metrics, but at per-gene resolution
 def compute_metrics_per_gene(y_true, y_pred):
-    """Compute metrics for each gene separately (recommended for multi-output)."""
+    """Compute metrics for each gene separately (recommended for multi-output)."""   
     n_genes = y_true.shape[1]
     results = []
-    
-    y_true = y_true.ravel()
-    y_pred = y_pred.ravel()
     
     for gene_idx in range(n_genes):
         y_t = y_true[:, gene_idx]
