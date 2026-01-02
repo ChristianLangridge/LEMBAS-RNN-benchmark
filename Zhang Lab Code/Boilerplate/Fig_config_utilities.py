@@ -117,7 +117,7 @@ print(type(mlr_y_pred), mlr_y_pred.shape)
 
 ##### loading XGBRF models (v3, trained on centered data)
 xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/XGBRF/model_multioutput_v3.joblib'
-xgbrf_loaded = joblib.load(mlr_model_path)
+xgbrf_loaded = joblib.load(xgbrf_model_path)
 xgbrf_y_pred = xgbrf_loaded.predict(x_test_centered)          
 print(type(xgbrf_y_pred), xgbrf_y_pred.shape)
 
