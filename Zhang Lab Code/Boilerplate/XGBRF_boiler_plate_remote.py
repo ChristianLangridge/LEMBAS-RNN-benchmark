@@ -61,3 +61,17 @@ y_test_centered = y_test - y_train_col_means
 # for val set
 x_val_centered = x_val - x_train_col_means
 y_val_centered = y_val - y_train_col_means
+
+###############################################################################################
+
+# Save centered training sets
+x_train_centered.to_csv('x_train_centered.csv', index=False)
+y_train_centered.to_csv('y_train_centered.csv', index=False)
+
+# Save centered test sets
+x_test_centered.to_csv('x_test_centered.csv', index=False)
+y_test_centered.to_csv('y_test_centered.csv', index=False)
+
+# Save centered validation sets
+x_val_centered.to_csv('x_val_centered.csv', index=False)
+y_val_centered.to_csv('y_val_centered.csv', index=False)
