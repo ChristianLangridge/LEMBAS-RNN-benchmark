@@ -33,14 +33,10 @@ x_test = x_test.to_numpy()
 y_test = y_test.to_numpy()
 
 # converting back into a dataframe to restore gene IDs 
-x_train_centered_df = pd.DataFrame(x_train_centered, columns=feature_names)
-x_val_centered_df = pd.DataFrame(x_val_centered, columns=feature_names)
-x_test_centered_df = pd.DataFrame(x_test_centered, columns=feature_names)
+x_train_df = pd.DataFrame(x_train, columns=feature_names)
+x_val_df = pd.DataFrame(x_val, columns=feature_names)
+x_test_df = pd.DataFrame(x_test, columns=feature_names)
 
-y_train_centered_df = pd.DataFrame(y_train_centered, columns=target_names)
-y_val_centered_df = pd.DataFrame(y_val_centered, columns=target_names)
-y_test_centered_df = pd.DataFrame(y_test_centered, columns=target_names)
-
-# saving column means for potential future usage
-x_train_column_means_df = pd.DataFrame([x_train_col_means], columns=feature_names)
-y_train_column_means_df = pd.DataFrame([y_train_col_means], columns=target_names)
+y_train_df = pd.DataFrame(y_train, columns=target_names)
+y_val_df = pd.DataFrame(y_val, columns=target_names)
+y_test_df = pd.DataFrame(y_test, columns=target_names)
