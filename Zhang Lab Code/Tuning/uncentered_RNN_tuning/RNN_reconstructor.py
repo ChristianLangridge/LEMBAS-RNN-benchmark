@@ -1,11 +1,16 @@
 """
-STANDALONE LOADER - No Import Issues!
-======================================
+STANDALONE LOADER - EXACT PARAMETERS FROM TRAINING
+===================================================
 
-This file contains ALL the code needed to load your model.
-No external imports required (except standard libraries).
+This uses the EXACT initialization parameters from benchmark.py
+to ensure perfect reconstruction of your trained model.
 
-Just copy this file to your project and run it!
+Key parameters extracted from benchmark.py:
+- projection_amplitude_in = 1.2 (not 1.0!)
+- projection_amplitude_out = 1.2 (not 1.0!)
+- bionet_params: target_steps=150, max_steps=10, exp_factor=50, tolerance=1e-20, leak=1e-2
+- Network columns: source='TF', target='Gene', weight='Interaction'
+- Data: ligand_input from 'TF.tsv', tf_output from 'Geneexpression.tsv'
 """
 
 import torch
@@ -81,6 +86,21 @@ def set_seeds(seed: int=888):
 def np_to_torch(arr: np.array, dtype: torch.dtype, device: str = 'cpu'):
     """Convert numpy array to torch tensor"""
     return torch.tensor(arr, dtype=dtype, device=device)
+
+
+def format_network(net: pd.DataFrame, weight_label: str = 'Interaction') -> pd.DataFrame:
+    """
+    Format network with Interaction column.
+    From model_utilities.py in LEMBAS.
+    """
+    formatted_net = net.copy()
+    
+    # Ensure Interaction column exists and is numeric
+    if weight_label not in formatted_net.columns:
+        raise ValueError(f"Input data must contain `{weight_label}` column")
+    formatted_net[weight_label] = pd.to_numeric(formatted_net[weight_label], errors='coerce')
+    
+    return formatted_net
 
 
 # =============================================================================
@@ -184,6 +204,16 @@ class BioNet(nn.Module):
         
         Y_full = X_new.T
         return Y_full
+    
+    def prescale_weights(self, target_radius: float = 0.8):
+        """Scale weights according to spectral radius - used in benchmark.py"""
+        A = scipy.sparse.csr_matrix(self.weights.detach().cpu().numpy())
+        np.random.seed(self.seed)
+        eigen_value, _ = eigs(A, k=1, v0=np.random.rand(A.shape[0]))
+        spectral_radius = np.abs(eigen_value)
+        
+        factor = target_radius/spectral_radius.item()
+        self.weights.data = self.weights.data * factor
 
 
 class ProjectOutput(nn.Module):
@@ -307,12 +337,20 @@ class SignalingModel(torch.nn.Module):
 
 
 # =============================================================================
-# CHECKPOINT LOADER
+# CHECKPOINT LOADER WITH EXACT TRAINING PARAMETERS
 # =============================================================================
 
-def load_model_from_checkpoint(checkpoint_path, node_names=None, net=None, X_in=None, y_out=None, device='cpu'):
+def load_model_from_checkpoint(
+    checkpoint_path, 
+    node_names=None, 
+    net=None, 
+    X_in=None, 
+    y_out=None, 
+    device='cpu',
+    use_exact_training_params=True
+):
     """
-    Load model from checkpoint - STANDALONE VERSION
+    Load model from checkpoint using EXACT parameters from benchmark.py
     
     Parameters
     ----------
@@ -321,30 +359,78 @@ def load_model_from_checkpoint(checkpoint_path, node_names=None, net=None, X_in=
     node_names : list, optional
         Node names. If None, uses generic names.
     net : pd.DataFrame, optional
-        Network. If None, reconstructs from checkpoint.
+        Network with columns: 'TF' (source), 'Gene' (target), 'Interaction' (weight)
+        If None, reconstructs from checkpoint.
     X_in : pd.DataFrame, optional
-        Input data. If None, creates dummy data.
+        Input data (TF activities). If None, creates dummy data.
     y_out : pd.DataFrame, optional
-        Output data. If None, creates dummy data.
+        Output data (gene expression). If None, creates dummy data.
     device : str
         'cpu' or 'cuda'
+    use_exact_training_params : bool
+        If True, uses EXACT params from benchmark.py. If False, uses checkpoint params.
         
     Returns
     -------
     model : SignalingModel
         Loaded model ready to use
+        
+    Notes
+    -----
+    EXACT TRAINING PARAMETERS from benchmark.py:
+    - projection_amplitude_in = 1.2
+    - projection_amplitude_out = 1.2
+    - bionet_params = {
+        'target_steps': 150,
+        'max_steps': 10,
+        'exp_factor': 50,
+        'tolerance': 1e-20,
+        'leak': 1e-2
+      }
+    - weight_label = 'Interaction'
+    - source_label = 'TF'
+    - target_label = 'Gene'
+    - prescale_weights called with target_radius=0.8
+    - input_layer.weights.requires_grad = False
     """
     
-    print("Loading checkpoint...")
-    checkpoint = torch.load('/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/RNN/signaling_model.v1.pt', map_location='cpu')
+    print("=" * 70)
+    print("LOADING WITH EXACT TRAINING PARAMETERS")
+    print("=" * 70)
     
+    # Load checkpoint
+    checkpoint = torch.load('/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/RNN/signaling_model.v1.pt', map_location='cpu')
     state_dict = checkpoint['state_dict']
-    config = {
-        'seed': checkpoint.get('seed', 888),
-        'bionet_params': checkpoint.get('bionet_params'),
-        'projection_amplitude_in': checkpoint.get('projection_amplitude_in', 1.0),
-        'projection_amplitude_out': checkpoint.get('projection_amplitude_out', 1.0)
-    }
+    
+    # EXACT parameters from benchmark.py
+    if use_exact_training_params:
+        print("\n✓ Using EXACT parameters from benchmark.py")
+        config = {
+            'seed': checkpoint.get('seed', 888),
+            'projection_amplitude_in': 1.2,  # From benchmark.py!
+            'projection_amplitude_out': 1.2,  # From benchmark.py!
+            'bionet_params': {
+                'target_steps': 150,  # From benchmark.py!
+                'max_steps': 10,      # From benchmark.py!
+                'exp_factor': 50,     # From benchmark.py!
+                'tolerance': 1e-20,   # From benchmark.py!
+                'leak': 1e-2          # From benchmark.py! (same as 0.01)
+            }
+        }
+    else:
+        # Use checkpoint params
+        config = {
+            'seed': checkpoint.get('seed', 888),
+            'bionet_params': checkpoint.get('bionet_params'),
+            'projection_amplitude_in': checkpoint.get('projection_amplitude_in', 1.0),
+            'projection_amplitude_out': checkpoint.get('projection_amplitude_out', 1.0)
+        }
+    
+    print(f"\nConfiguration:")
+    print(f"  seed: {config['seed']}")
+    print(f"  projection_amplitude_in: {config['projection_amplitude_in']}")
+    print(f"  projection_amplitude_out: {config['projection_amplitude_out']}")
+    print(f"  bionet_params: {config['bionet_params']}")
     
     # Get dimensions
     network_key = [k for k in state_dict.keys() if 'network' in k.lower() and 'weight' in k.lower() and len(state_dict[k].shape) == 2][0]
@@ -357,14 +443,18 @@ def load_model_from_checkpoint(checkpoint_path, node_names=None, net=None, X_in=
     output_key = [k for k in state_dict.keys() if 'output' in k.lower() and 'weight' in k.lower()][0]
     n_tfs = state_dict[output_key].shape[0]
     
-    print(f"Model dimensions: {n_nodes} nodes, {n_ligands} ligands, {n_tfs} TFs")
+    print(f"\nModel dimensions:")
+    print(f"  Total nodes: {n_nodes}")
+    print(f"  Input TFs: {n_ligands}")
+    print(f"  Output genes: {n_tfs}")
+    print(f"  Edges: {np.count_nonzero(adj_matrix)}")
     
     # Create node names
     if node_names is None:
         node_names = [f'node_{i}' for i in range(n_nodes)]
-        print("⚠️  Using generic node names")
+        print("\n⚠️  Using generic node names (node_0, node_1, ...)")
     
-    # Reconstruct network
+    # Reconstruct network with EXACT column names from benchmark.py
     if net is None:
         sources, targets, weights = [], [], []
         for i in range(n_nodes):
@@ -374,12 +464,17 @@ def load_model_from_checkpoint(checkpoint_path, node_names=None, net=None, X_in=
                     sources.append(node_names[j])
                     weights.append(adj_matrix[i, j])
         
+        # Use benchmark.py column names: 'TF', 'Gene', 'Interaction'
         net = pd.DataFrame({
-            'source': sources,
-            'target': targets,
-            'mode_of_action': [1 if w > 0 else -1 for w in weights]
+            'TF': sources,        # source_label from benchmark.py
+            'Gene': targets,      # target_label from benchmark.py
+            'Interaction': [1 if w > 0 else -1 for w in weights]  # weight_label from benchmark.py
         })
-        print(f"✓ Reconstructed network: {len(net)} edges")
+        print(f"\n✓ Reconstructed network: {len(net)} edges")
+        print(f"  Using benchmark.py columns: 'TF', 'Gene', 'Interaction'")
+    
+    # Format network (from benchmark.py)
+    net = format_network(net, weight_label='Interaction')
     
     # Create dummy data
     if X_in is None:
@@ -387,7 +482,7 @@ def load_model_from_checkpoint(checkpoint_path, node_names=None, net=None, X_in=
             np.random.rand(100, n_ligands) * 0.1,
             columns=[node_names[i] for i in range(n_ligands)]
         )
-        print("⚠️  Using dummy input data")
+        print("\n⚠️  Using dummy input data")
     
     if y_out is None:
         y_out = pd.DataFrame(
@@ -396,14 +491,20 @@ def load_model_from_checkpoint(checkpoint_path, node_names=None, net=None, X_in=
         )
         print("⚠️  Using dummy output data")
     
-    # Initialize model
-    print("Initializing model...")
+    # Initialize model with EXACT parameters from benchmark.py
+    print("\n" + "=" * 70)
+    print("INITIALIZING MODEL")
+    print("=" * 70)
+    
     model = SignalingModel(
         net=net,
         X_in=X_in,
         y_out=y_out,
         projection_amplitude_in=config['projection_amplitude_in'],
         projection_amplitude_out=config['projection_amplitude_out'],
+        weight_label='Interaction',  # From benchmark.py
+        source_label='TF',           # From benchmark.py
+        target_label='Gene',         # From benchmark.py
         bionet_params=config['bionet_params'],
         activation_function='MML',
         dtype=torch.float32,
@@ -411,9 +512,31 @@ def load_model_from_checkpoint(checkpoint_path, node_names=None, net=None, X_in=
         seed=config['seed']
     )
     
-    # Load weights
-    print("Loading weights...")
-    model.load_state_dict(state_dict)
+    print("✓ Model structure initialized")
     
-    print("✅ Model loaded successfully!")
+    # Load weights
+    print("\n" + "=" * 70)
+    print("LOADING WEIGHTS")
+    print("=" * 70)
+    
+    model.load_state_dict(state_dict)
+    print("✓ Weights loaded")
+    
+    # Apply settings from benchmark.py
+    print("\n" + "=" * 70)
+    print("APPLYING BENCHMARK.PY SETTINGS")
+    print("=" * 70)
+    
+    # From benchmark.py: input_layer.weights.requires_grad = False
+    model.input_layer.weights.requires_grad = False
+    print("✓ Set input_layer.weights.requires_grad = False")
+    
+    # Note: prescale_weights was called BEFORE training, so weights are already scaled
+    # The loaded weights from checkpoint already have this applied
+    print("✓ Weights already include prescale_weights(target_radius=0.8) from training")
+    
+    print("\n" + "=" * 70)
+    print("✅ MODEL LOADED WITH EXACT TRAINING PARAMETERS")
+    print("=" * 70)
+    
     return model
