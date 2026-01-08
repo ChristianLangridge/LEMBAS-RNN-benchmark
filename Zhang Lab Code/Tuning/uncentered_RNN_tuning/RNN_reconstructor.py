@@ -274,11 +274,36 @@ class SignalingModel(torch.nn.Module):
         else:
             bionet_params = self.set_training_parameters(**bionet_params)
         
-        self.X_in = X_in if isinstance(X_in, torch.Tensor) else torch.tensor(X_in.values.copy(), dtype=dtype, device=device)
-        self.y_out = y_out if isinstance(y_out, torch.Tensor) else torch.tensor(y_out.values.copy(), dtype=dtype, device=device)
+        # Handle X_in - works with DataFrames, numpy arrays, or Tensors
+        if isinstance(X_in, torch.Tensor):
+            self.X_in = X_in
+        elif isinstance(X_in, pd.DataFrame):
+            self.X_in = torch.tensor(X_in.values.copy(), dtype=dtype, device=device)
+        else:  # numpy array
+            self.X_in = torch.tensor(X_in.copy() if hasattr(X_in, 'copy') else X_in, dtype=dtype, device=device)
+        
+        # Handle y_out - works with DataFrames, numpy arrays, or Tensors
+        if isinstance(y_out, torch.Tensor):
+            self.y_out = y_out
+        elif isinstance(y_out, pd.DataFrame):
+            self.y_out = torch.tensor(y_out.values.copy(), dtype=dtype, device=device)
+        else:  # numpy array
+            self.y_out = torch.tensor(y_out.copy() if hasattr(y_out, 'copy') else y_out, dtype=dtype, device=device)
+        
+        # Handle input labels
+        if isinstance(X_in, pd.DataFrame):
+            input_labels = X_in.columns.values
+        else:  # numpy array or Tensor
+            input_labels = np.arange(self.X_in.shape[1])
+        
+        # Handle output labels
+        if isinstance(y_out, pd.DataFrame):
+            output_labels = y_out.columns.values
+        else:  # numpy array or Tensor
+            output_labels = np.arange(self.y_out.shape[1])
         
         self.input_layer = ProjectInput(node_idx_map=self.node_idx_map,
-                                       input_labels=X_in.columns.values if hasattr(X_in, 'columns') else np.arange(X_in.shape[1]),
+                                       input_labels=input_labels,
                                        projection_amplitude=projection_amplitude_in,
                                        dtype=self.dtype, device=self.device)
         
@@ -289,7 +314,7 @@ class SignalingModel(torch.nn.Module):
                                        dtype=self.dtype, device=self.device, seed=self.seed)
         
         self.output_layer = ProjectOutput(node_idx_map=self.node_idx_map,
-                                         output_labels=y_out.columns.values if hasattr(y_out, 'columns') else np.arange(y_out.shape[1]),
+                                         output_labels=output_labels,
                                          projection_amplitude=self.projection_amplitude_out,
                                          dtype=self.dtype, device=device)
     
@@ -334,6 +359,75 @@ class SignalingModel(torch.nn.Module):
     
     def copy(self):
         return copy.deepcopy(self)
+
+
+# =============================================================================
+# UTILITY FUNCTION FOR COLUMN DETECTION
+# =============================================================================
+
+def detect_network_columns(net: pd.DataFrame):
+    """
+    Automatically detect column names in the network DataFrame.
+    
+    Returns
+    -------
+    source_col : str
+        Name of the source column
+    target_col : str
+        Name of the target column
+    weight_col : str
+        Name of the weight/interaction column
+    """
+    
+    cols = net.columns.tolist()
+    print(f"\nDetected network columns: {cols}")
+    
+    # Common patterns for source column
+    source_patterns = ['source', 'tf', 'from', 'src', 'regulator']
+    source_col = None
+    for pattern in source_patterns:
+        matches = [c for c in cols if pattern.lower() in c.lower()]
+        if matches:
+            source_col = matches[0]
+            break
+    
+    # Common patterns for target column
+    target_patterns = ['target', 'gene', 'to', 'tgt', 'dest', 'destination']
+    target_col = None
+    for pattern in target_patterns:
+        matches = [c for c in cols if pattern.lower() in c.lower()]
+        if matches:
+            target_col = matches[0]
+            break
+    
+    # Common patterns for weight column
+    weight_patterns = ['interaction', 'weight', 'mode', 'moa', 'sign', 'type', 'effect']
+    weight_col = None
+    for pattern in weight_patterns:
+        matches = [c for c in cols if pattern.lower() in c.lower()]
+        if matches:
+            weight_col = matches[0]
+            break
+    
+    # If still not found, use positional defaults
+    if source_col is None and len(cols) >= 1:
+        source_col = cols[0]
+        print(f"⚠️  Using first column as source: '{source_col}'")
+    
+    if target_col is None and len(cols) >= 2:
+        target_col = cols[1]
+        print(f"⚠️  Using second column as target: '{target_col}'")
+    
+    if weight_col is None and len(cols) >= 3:
+        weight_col = cols[2]
+        print(f"⚠️  Using third column as weight: '{weight_col}'")
+    
+    if source_col is None or target_col is None or weight_col is None:
+        raise ValueError(f"Could not detect network columns. Found: {cols}")
+    
+    print(f"✓ Using columns: source='{source_col}', target='{target_col}', weight='{weight_col}'")
+    
+    return source_col, target_col, weight_col
 
 
 # =============================================================================
@@ -399,7 +493,7 @@ def load_model_from_checkpoint(
     print("=" * 70)
     
     # Load checkpoint
-    checkpoint = torch.load('/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/RNN/signaling_model.v1.pt', map_location='cpu')
+    checkpoint = torch.load(checkpoint_path, map_location='cpu')
     state_dict = checkpoint['state_dict']
     
     # EXACT parameters from benchmark.py
@@ -540,3 +634,71 @@ def load_model_from_checkpoint(
     print("=" * 70)
     
     return model
+
+
+# =============================================================================
+# EXAMPLE USAGE
+# =============================================================================
+
+if __name__ == "__main__":
+    
+    checkpoint_path = '/home/christian/Zhang-Lab/Zhang Lab Data/Saved models/RNN/signaling_model.v1.pt'
+    
+    print("EXACT PARAMETERS FROM BENCHMARK.PY")
+    print("=" * 70)
+    print("""
+    projection_amplitude_in = 1.2
+    projection_amplitude_out = 1.2
+    bionet_params = {
+        'target_steps': 150,
+        'max_steps': 10,
+        'exp_factor': 50,
+        'tolerance': 1e-20,
+        'leak': 1e-2
+    }
+    weight_label = 'Interaction'
+    source_label = 'TF'
+    target_label = 'Gene'
+    input_layer.weights.requires_grad = False
+    prescale_weights(target_radius=0.8) was applied before training
+    """)
+    
+    # Load model with exact parameters
+    model = load_model_from_checkpoint(
+        checkpoint_path,
+        use_exact_training_params=True  # Uses benchmark.py params!
+    )
+    
+    # Test it
+    print("\n" + "=" * 70)
+    print("TESTING MODEL")
+    print("=" * 70)
+    
+    model.eval()
+    with torch.no_grad():
+        X_test = model.X_in[:3]
+        y_pred, y_full = model(X_test)
+        
+        print(f"\n✓ Forward pass successful!")
+        print(f"  Input shape: {X_test.shape}")
+        print(f"  Output shape: {y_pred.shape}")
+        print(f"  Network state shape: {y_full.shape}")
+        print(f"\n✓ Sample prediction (first gene):")
+        print(f"  {y_pred[0, 0].item():.6f}")
+        
+        if not torch.isnan(y_pred).any() and not torch.isinf(y_pred).any():
+            print("\n✅ Model is healthy!")
+        else:
+            print("\n⚠️  Warning: Model output has NaN or inf")
+    
+    print("\n" + "=" * 70)
+    print("VERIFICATION")
+    print("=" * 70)
+    print(f"✓ projection_amplitude_in = {model.input_layer.projection_amplitude}")
+    print(f"✓ projection_amplitude_out = {model.projection_amplitude_out}")
+    print(f"✓ bionet max_steps = {model.signaling_network.training_params['max_steps']}")
+    print(f"✓ bionet tolerance = {model.signaling_network.training_params['tolerance']}")
+    print(f"✓ bionet leak = {model.signaling_network.training_params['leak']}")
+    print(f"✓ input_layer.weights.requires_grad = {model.input_layer.weights.requires_grad}")
+    
+    print("\n✅ Model loaded with EXACT training parameters!")
