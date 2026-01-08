@@ -336,7 +336,7 @@ def load_model_from_checkpoint(checkpoint_path, node_names=None, net=None, X_in=
     """
     
     print("Loading checkpoint...")
-    checkpoint = torch.load('~/Zhang Lab Data/Saved models/RNN/signaling_model.v1.pt', map_location='cpu')
+    checkpoint = torch.load('/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/RNN/signaling_model.v1.pt', map_location='cpu')
     
     state_dict = checkpoint['state_dict']
     config = {
