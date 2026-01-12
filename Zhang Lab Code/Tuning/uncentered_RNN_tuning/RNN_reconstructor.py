@@ -1,16 +1,14 @@
 """
-STANDALONE LOADER - EXACT PARAMETERS FROM TRAINING
-===================================================
+ RNN RECONSTRUCTOR - REINITIALISES RNN FROM CHECKPOINT 
+==============================================================
 
-This uses the EXACT initialization parameters from benchmark.py
-to ensure perfect reconstruction of your trained model.
+This version replicates the behavior from benchmark.py training script:
+1. Passes df (not tensors) to SignalingModel
+2. Allows SignalingModel to filter data to network nodes internally
+3. Converts to tensors after model initialisation
+4. Uses format_network() exactly as in training
 
-Key parameters extracted from benchmark.py:
-- projection_amplitude_in = 1.2 (not 1.0!)
-- projection_amplitude_out = 1.2 (not 1.0!)
-- bionet_params: target_steps=150, max_steps=10, exp_factor=50, tolerance=1e-20, leak=1e-2
-- Network columns: source='TF', target='Gene', weight='Interaction'
-- Data: ligand_input from 'TF.tsv', tf_output from 'Geneexpression.tsv'
+
 """
 
 import torch
@@ -24,7 +22,7 @@ import copy
 
 
 # =============================================================================
-# ACTIVATION FUNCTIONS (from activation_functions.py)
+# ACTIVATION FUNCTIONS
 # =============================================================================
 
 def MML_activation(x: torch.Tensor, leak: Union[float, int]):
@@ -71,7 +69,7 @@ activation_function_map = {
 
 
 # =============================================================================
-# UTILITIES (from utilities.py and model_utilities.py)
+# UTILITIES
 # =============================================================================
 
 def set_seeds(seed: int=888):
@@ -90,12 +88,11 @@ def np_to_torch(arr: np.array, dtype: torch.dtype, device: str = 'cpu'):
 
 def format_network(net: pd.DataFrame, weight_label: str = 'Interaction') -> pd.DataFrame:
     """
-    Format network with Interaction column.
-    From model_utilities.py in LEMBAS.
+    Format network - EXACTLY as in training script.
+    Only ensures weight column is numeric.
     """
     formatted_net = net.copy()
     
-    # Ensure Interaction column exists and is numeric
     if weight_label not in formatted_net.columns:
         raise ValueError(f"Input data must contain `{weight_label}` column")
     formatted_net[weight_label] = pd.to_numeric(formatted_net[weight_label], errors='coerce')
@@ -104,7 +101,7 @@ def format_network(net: pd.DataFrame, weight_label: str = 'Interaction') -> pd.D
 
 
 # =============================================================================
-# MODEL CLASSES (from bionetwork.py)
+# MODEL CLASSES
 # =============================================================================
 
 class ProjectInput(nn.Module):
@@ -206,7 +203,7 @@ class BioNet(nn.Module):
         return Y_full
     
     def prescale_weights(self, target_radius: float = 0.8):
-        """Scale weights according to spectral radius - used in benchmark.py"""
+        """Scale weights according to spectral radius"""
         A = scipy.sparse.csr_matrix(self.weights.detach().cpu().numpy())
         np.random.seed(self.seed)
         eigen_value, _ = eigs(A, k=1, v0=np.random.rand(A.shape[0]))
@@ -238,7 +235,7 @@ class ProjectOutput(nn.Module):
 
 
 class SignalingModel(torch.nn.Module):
-    """Complete signaling network model"""
+    """Complete signaling network model - MATCHES TRAINING SCRIPT"""
     
     DEFAULT_TRAINING_PARAMETERS = {
         'target_steps': 100,
@@ -274,36 +271,15 @@ class SignalingModel(torch.nn.Module):
         else:
             bionet_params = self.set_training_parameters(**bionet_params)
         
-        # Handle X_in - works with DataFrames, numpy arrays, or Tensors
-        if isinstance(X_in, torch.Tensor):
-            self.X_in = X_in
-        elif isinstance(X_in, pd.DataFrame):
-            self.X_in = torch.tensor(X_in.values.copy(), dtype=dtype, device=device)
-        else:  # numpy array
-            self.X_in = torch.tensor(X_in.copy() if hasattr(X_in, 'copy') else X_in, dtype=dtype, device=device)
+        # CRITICAL: filters data to network nodes like training run benchmark.py
+        self.X_in = X_in.loc[:, np.intersect1d(X_in.columns.values, node_labels)]
+        self.y_out = y_out.loc[:, np.intersect1d(y_out.columns.values, node_labels)]
         
-        # Handle y_out - works with DataFrames, numpy arrays, or Tensors
-        if isinstance(y_out, torch.Tensor):
-            self.y_out = y_out
-        elif isinstance(y_out, pd.DataFrame):
-            self.y_out = torch.tensor(y_out.values.copy(), dtype=dtype, device=device)
-        else:  # numpy array
-            self.y_out = torch.tensor(y_out.copy() if hasattr(y_out, 'copy') else y_out, dtype=dtype, device=device)
-        
-        # Handle input labels
-        if isinstance(X_in, pd.DataFrame):
-            input_labels = X_in.columns.values
-        else:  # numpy array or Tensor
-            input_labels = np.arange(self.X_in.shape[1])
-        
-        # Handle output labels
-        if isinstance(y_out, pd.DataFrame):
-            output_labels = y_out.columns.values
-        else:  # numpy array or Tensor
-            output_labels = np.arange(self.y_out.shape[1])
+        print(f"  Filtered X_in: {X_in.shape[1]} → {self.X_in.shape[1]} features")
+        print(f"  Filtered y_out: {y_out.shape[1]} → {self.y_out.shape[1]} features")
         
         self.input_layer = ProjectInput(node_idx_map=self.node_idx_map,
-                                       input_labels=input_labels,
+                                       input_labels=self.X_in.columns.values,
                                        projection_amplitude=projection_amplitude_in,
                                        dtype=self.dtype, device=self.device)
         
@@ -314,7 +290,7 @@ class SignalingModel(torch.nn.Module):
                                        dtype=self.dtype, device=self.device, seed=self.seed)
         
         self.output_layer = ProjectOutput(node_idx_map=self.node_idx_map,
-                                         output_labels=output_labels,
+                                         output_labels=self.y_out.columns.values,
                                          projection_amplitude=self.projection_amplitude_out,
                                          dtype=self.dtype, device=device)
     
@@ -351,6 +327,10 @@ class SignalingModel(torch.nn.Module):
         params = {k: v for k, v in params.items() if k in allowed_params}
         return params
     
+    def df_to_tensor(self, df: pd.DataFrame):
+        """Convert DataFrame to tensor - EXACTLY as in training script"""
+        return torch.tensor(df.values.copy(), dtype=self.dtype, device=self.device)
+    
     def forward(self, X_in):
         X_full = self.input_layer(X_in)
         Y_full = self.signaling_network(X_full)
@@ -362,157 +342,88 @@ class SignalingModel(torch.nn.Module):
 
 
 # =============================================================================
-# UTILITY FUNCTION FOR COLUMN DETECTION
-# =============================================================================
-
-def detect_network_columns(net: pd.DataFrame):
-    """
-    Automatically detect column names in the network DataFrame.
-    
-    Returns
-    -------
-    source_col : str
-        Name of the source column
-    target_col : str
-        Name of the target column
-    weight_col : str
-        Name of the weight/interaction column
-    """
-    
-    cols = net.columns.tolist()
-    print(f"\nDetected network columns: {cols}")
-    
-    # Common patterns for source column
-    source_patterns = ['source', 'tf', 'from', 'src', 'regulator']
-    source_col = None
-    for pattern in source_patterns:
-        matches = [c for c in cols if pattern.lower() in c.lower()]
-        if matches:
-            source_col = matches[0]
-            break
-    
-    # Common patterns for target column
-    target_patterns = ['target', 'gene', 'to', 'tgt', 'dest', 'destination']
-    target_col = None
-    for pattern in target_patterns:
-        matches = [c for c in cols if pattern.lower() in c.lower()]
-        if matches:
-            target_col = matches[0]
-            break
-    
-    # Common patterns for weight column
-    weight_patterns = ['interaction', 'weight', 'mode', 'moa', 'sign', 'type', 'effect']
-    weight_col = None
-    for pattern in weight_patterns:
-        matches = [c for c in cols if pattern.lower() in c.lower()]
-        if matches:
-            weight_col = matches[0]
-            break
-    
-    # If still not found, use positional defaults
-    if source_col is None and len(cols) >= 1:
-        source_col = cols[0]
-        print(f"⚠️  Using first column as source: '{source_col}'")
-    
-    if target_col is None and len(cols) >= 2:
-        target_col = cols[1]
-        print(f"⚠️  Using second column as target: '{target_col}'")
-    
-    if weight_col is None and len(cols) >= 3:
-        weight_col = cols[2]
-        print(f"⚠️  Using third column as weight: '{weight_col}'")
-    
-    if source_col is None or target_col is None or weight_col is None:
-        raise ValueError(f"Could not detect network columns. Found: {cols}")
-    
-    print(f"✓ Using columns: source='{source_col}', target='{target_col}', weight='{weight_col}'")
-    
-    return source_col, target_col, weight_col
-
-
-# =============================================================================
-# CHECKPOINT LOADER WITH EXACT TRAINING PARAMETERS
+# CHECKPOINT LOADER 
 # =============================================================================
 
 def load_model_from_checkpoint(
-    checkpoint_path, 
-    node_names=None, 
-    net=None, 
-    X_in=None, 
-    y_out=None, 
+    checkpoint_path,
+    net_path,
+    X_in_df,
+    y_out_df,
     device='cpu',
     use_exact_training_params=True
 ):
     """
-    Load model from checkpoint using EXACT parameters from benchmark.py
+    Load model EXACTLY as training script does.
     
     Parameters
     ----------
     checkpoint_path : str
-        Path to your .pt checkpoint file
-    node_names : list, optional
-        Node names. If None, uses generic names.
-    net : pd.DataFrame, optional
-        Network with columns: 'TF' (source), 'Gene' (target), 'Interaction' (weight)
-        If None, reconstructs from checkpoint.
-    X_in : pd.DataFrame, optional
-        Input data (TF activities). If None, creates dummy data.
-    y_out : pd.DataFrame, optional
-        Output data (gene expression). If None, creates dummy data.
+        Path to .pt checkpoint
+    net_path : str
+        Path to network.tsv file
+    X_in_df : pd.DataFrame
+        Input DataFrame (will be automatically filtered to network nodes)
+    y_out_df : pd.DataFrame
+        Output DataFrame (will be automatically filtered to network nodes)
     device : str
         'cpu' or 'cuda'
     use_exact_training_params : bool
-        If True, uses EXACT params from benchmark.py. If False, uses checkpoint params.
+        Use exact params from benchmark.py
         
     Returns
     -------
     model : SignalingModel
-        Loaded model ready to use
+        Loaded model ready for inference
         
     Notes
     -----
-    EXACT TRAINING PARAMETERS from benchmark.py:
-    - projection_amplitude_in = 1.2
-    - projection_amplitude_out = 1.2
-    - bionet_params = {
-        'target_steps': 150,
-        'max_steps': 10,
-        'exp_factor': 50,
-        'tolerance': 1e-20,
-        'leak': 1e-2
-      }
-    - weight_label = 'Interaction'
-    - source_label = 'TF'
-    - target_label = 'Gene'
-    - prescale_weights called with target_radius=0.8
-    - input_layer.weights.requires_grad = False
+    This replicates the EXACT sequence from benchmark.py:
+    1. Load network with pd.read_csv
+    2. Format network with format_network()
+    3. Pass DataFrames to SignalingModel (NOT tensors!)
+    4. Let SignalingModel filter data internally
+    5. Convert to tensors AFTER initialization
+    6. Set input_layer.weights.requires_grad = False
+    7. Apply prescale_weights
+    8. Load state dict
     """
     
     print("=" * 70)
-    print("LOADING WITH EXACT TRAINING PARAMETERS")
+    print("LOADING MODEL - EXACT TRAINING SCRIPT SEQUENCE")
     print("=" * 70)
     
-    # Load checkpoint
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    # Step 1: Load checkpoint
+    print(f"\n1. Loading checkpoint from: {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
     state_dict = checkpoint['state_dict']
     
-    # EXACT parameters from benchmark.py
+    # Step 2: Load network - EXACTLY as training script
+    print(f"\n2. Loading network from: {net_path}")
+    net = pd.read_csv(net_path, sep='\t', index_col=False)
+    print(f"   Network shape: {net.shape}")
+    print(f"   Network columns: {net.columns.tolist()}")
+    
+    # Step 3: Format network - EXACTLY as training script
+    print(f"\n3. Formatting network...")
+    net = format_network(net, weight_label='Interaction')
+    
+    # Step 4: Get configuration
     if use_exact_training_params:
-        print("\n✓ Using EXACT parameters from benchmark.py")
+        print(f"\n4. Using EXACT benchmark.py parameters")
         config = {
             'seed': checkpoint.get('seed', 888),
-            'projection_amplitude_in': 1.2,  # From benchmark.py!
-            'projection_amplitude_out': 1.2,  # From benchmark.py!
+            'projection_amplitude_in': 1.2,
+            'projection_amplitude_out': 1.2,
             'bionet_params': {
-                'target_steps': 150,  # From benchmark.py!
-                'max_steps': 10,      # From benchmark.py!
-                'exp_factor': 50,     # From benchmark.py!
-                'tolerance': 1e-20,   # From benchmark.py!
-                'leak': 1e-2          # From benchmark.py! (same as 0.01)
+                'target_steps': 150,
+                'max_steps': 10,
+                'exp_factor': 50,
+                'tolerance': 1e-20,
+                'leak': 1e-2
             }
         }
     else:
-        # Use checkpoint params
         config = {
             'seed': checkpoint.get('seed', 888),
             'bionet_params': checkpoint.get('bionet_params'),
@@ -520,85 +431,24 @@ def load_model_from_checkpoint(
             'projection_amplitude_out': checkpoint.get('projection_amplitude_out', 1.0)
         }
     
-    print(f"\nConfiguration:")
-    print(f"  seed: {config['seed']}")
-    print(f"  projection_amplitude_in: {config['projection_amplitude_in']}")
-    print(f"  projection_amplitude_out: {config['projection_amplitude_out']}")
-    print(f"  bionet_params: {config['bionet_params']}")
+    print(f"   projection_amplitude_in: {config['projection_amplitude_in']}")
+    print(f"   projection_amplitude_out: {config['projection_amplitude_out']}")
+    print(f"   bionet_params: {config['bionet_params']}")
     
-    # Get dimensions
-    network_key = [k for k in state_dict.keys() if 'network' in k.lower() and 'weight' in k.lower() and len(state_dict[k].shape) == 2][0]
-    adj_matrix = state_dict[network_key].cpu().numpy()
-    n_nodes = adj_matrix.shape[0]
-    
-    input_key = [k for k in state_dict.keys() if 'input' in k.lower() and 'weight' in k.lower()][0]
-    n_ligands = state_dict[input_key].shape[0]
-    
-    output_key = [k for k in state_dict.keys() if 'output' in k.lower() and 'weight' in k.lower()][0]
-    n_tfs = state_dict[output_key].shape[0]
-    
-    print(f"\nModel dimensions:")
-    print(f"  Total nodes: {n_nodes}")
-    print(f"  Input TFs: {n_ligands}")
-    print(f"  Output genes: {n_tfs}")
-    print(f"  Edges: {np.count_nonzero(adj_matrix)}")
-    
-    # Create node names
-    if node_names is None:
-        node_names = [f'node_{i}' for i in range(n_nodes)]
-        print("\n⚠️  Using generic node names (node_0, node_1, ...)")
-    
-    # Reconstruct network with EXACT column names from benchmark.py
-    if net is None:
-        sources, targets, weights = [], [], []
-        for i in range(n_nodes):
-            for j in range(n_nodes):
-                if adj_matrix[i, j] != 0:
-                    targets.append(node_names[i])
-                    sources.append(node_names[j])
-                    weights.append(adj_matrix[i, j])
-        
-        # Use benchmark.py column names: 'TF', 'Gene', 'Interaction'
-        net = pd.DataFrame({
-            'TF': sources,        # source_label from benchmark.py
-            'Gene': targets,      # target_label from benchmark.py
-            'Interaction': [1 if w > 0 else -1 for w in weights]  # weight_label from benchmark.py
-        })
-        print(f"\n✓ Reconstructed network: {len(net)} edges")
-        print(f"  Using benchmark.py columns: 'TF', 'Gene', 'Interaction'")
-    
-    # Format network (from benchmark.py)
-    net = format_network(net, weight_label='Interaction')
-    
-    # Create dummy data
-    if X_in is None:
-        X_in = pd.DataFrame(
-            np.random.rand(100, n_ligands) * 0.1,
-            columns=[node_names[i] for i in range(n_ligands)]
-        )
-        print("\n⚠️  Using dummy input data")
-    
-    if y_out is None:
-        y_out = pd.DataFrame(
-            np.random.rand(100, n_tfs) * 0.1,
-            columns=[node_names[i] for i in range(n_tfs)]
-        )
-        print("⚠️  Using dummy output data")
-    
-    # Initialize model with EXACT parameters from benchmark.py
-    print("\n" + "=" * 70)
-    print("INITIALIZING MODEL")
-    print("=" * 70)
+    # Step 5: Initialize model
+    print(f"\n5. Initializing model with DataFrames...")
+    print(f"   Input X_in shape: {X_in_df.shape}")
+    print(f"   Input y_out shape: {y_out_df.shape}")
     
     model = SignalingModel(
         net=net,
-        X_in=X_in,
-        y_out=y_out,
+        X_in=X_in_df,  
+        y_out=y_out_df, 
         projection_amplitude_in=config['projection_amplitude_in'],
         projection_amplitude_out=config['projection_amplitude_out'],
-        weight_label='Interaction',  # From benchmark.py
-        source_label='TF',           # From benchmark.py
-        target_label='Gene',         # From benchmark.py
+        weight_label='Interaction',
+        source_label='TF',
+        target_label='Gene',
         bionet_params=config['bionet_params'],
         activation_function='MML',
         dtype=torch.float32,
@@ -606,31 +456,37 @@ def load_model_from_checkpoint(
         seed=config['seed']
     )
     
-    print("✓ Model structure initialized")
+    print("   ✓ Model initialized (data automatically filtered)")
     
-    # Load weights
-    print("\n" + "=" * 70)
-    print("LOADING WEIGHTS")
-    print("=" * 70)
+    # Step 6: Convert to tensors 
+    print(f"\n6. Converting DataFrames to tensors...")
+    model.X_in = model.df_to_tensor(model.X_in)
+    model.y_out = model.df_to_tensor(model.y_out)
+    print("   ✓ Tensors created")
     
-    model.load_state_dict(state_dict)
-    print("✓ Weights loaded")
-    
-    # Apply settings from benchmark.py
-    print("\n" + "=" * 70)
-    print("APPLYING BENCHMARK.PY SETTINGS")
-    print("=" * 70)
-    
-    # From benchmark.py: input_layer.weights.requires_grad = False
+    # Step 7: Set training flags 
+    print(f"\n7. Applying training settings...")
     model.input_layer.weights.requires_grad = False
-    print("✓ Set input_layer.weights.requires_grad = False")
+    print("   ✓ Set input_layer.weights.requires_grad = False")
     
-    # Note: prescale_weights was called BEFORE training, so weights are already scaled
-    # The loaded weights from checkpoint already have this applied
-    print("✓ Weights already include prescale_weights(target_radius=0.8) from training")
+    model.signaling_network.prescale_weights(target_radius=0.8)
+    print("   ✓ Applied prescale_weights(target_radius=0.8)")
+    
+    # Step 8: Load weights
+    print(f"\n8. Loading trained weights...")
+    model.load_state_dict(state_dict)
+    print("   ✓ Weights loaded")
+    
+    # Step 9: Set to eval mode
+    model.eval()
+    print("   ✓ Model set to eval mode")
     
     print("\n" + "=" * 70)
-    print("✅ MODEL LOADED WITH EXACT TRAINING PARAMETERS")
+    print("✅ MODEL LOADED SUCCESSFULLY")
     print("=" * 70)
+    print(f"\nModel ready for inference:")
+    print(f"  Input features: {model.X_in.shape[1]}")
+    print(f"  Output features: {model.y_out.shape[1]}")
+    print(f"  Total network nodes: {model.signaling_network.n_network_nodes}")
     
     return model
