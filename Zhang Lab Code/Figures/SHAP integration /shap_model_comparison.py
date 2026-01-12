@@ -59,6 +59,11 @@ class SHAPModelComparator:
             Name of the model (key in models_dict)
         model_type : str
             Type of explainer to use: 'linear', 'tree', 'deep', 'kernel', or 'auto'
+            
+        Returns:
+        --------
+        shap_values : np.ndarray
+            Computed SHAP values for the model
         """
         model = self.models[model_name]
         
@@ -126,6 +131,8 @@ class SHAPModelComparator:
             self.explainers[model_name] = explainer
             self.shap_values[model_name] = shap_values
             print(f"✓ SHAP values computed for {model_name}")
+            
+            return shap_values  # ← FIXED: Now returns the computed SHAP values
             
         except Exception as e:
             print(f"✗ Error computing SHAP values for {model_name}: {e}")
@@ -358,72 +365,3 @@ class SHAPModelComparator:
                        f"of total importance\n")
         
         print(f"Report saved to {output_path}")
-
-
-def example_usage():
-    """
-    Example usage with synthetic data.
-    Replace with your actual models and data.
-    """
-    # Generate synthetic data
-    np.random.seed(42)
-    n_samples = 1000
-    n_features = 10
-    
-    X = np.random.randn(n_samples, n_features)
-    y = X[:, 0] * 2 + X[:, 1] * 1.5 - X[:, 2] * 0.5 + np.random.randn(n_samples) * 0.1
-    
-    feature_names = [f'Gene_{i}' for i in range(n_features)]
-    X_df = pd.DataFrame(X, columns=feature_names)
-    
-    # Train example models (replace with your actual models)
-    from sklearn.linear_model import LinearRegression
-    from xgboost import XGBRFRegressor
-    
-    mlr = LinearRegression()
-    mlr.fit(X, y)
-    
-    xgbrf = XGBRFRegressor(n_estimators=100, random_state=42)
-    xgbrf.fit(X, y)
-    
-    # For RNN, you would need to load your trained model
-    # Example placeholder:
-    # rnn = load_your_rnn_model()
-    
-    # Create comparator (without RNN for this example)
-    models = {
-        'MLR': mlr,
-        'XGBRF': xgbrf,
-        # 'LEMBAS-RNN': rnn  # Add when available
-    }
-    
-    comparator = SHAPModelComparator(
-        models_dict=models,
-        X_data=X_df,
-        feature_names=feature_names,
-        background_samples=100
-    )
-    
-    # Compute SHAP values for all models
-    comparator.compute_all_shap_values()
-    
-    # Generate visualizations
-    comparator.plot_comparative_summary(save_path='shap_summary_comparison.png')
-    comparator.plot_comparative_importance(save_path='shap_importance_comparison.png')
-    comparator.plot_feature_comparison_heatmap(save_path='shap_heatmap_comparison.png')
-    
-    # Generate report
-    comparator.generate_comparison_report()
-
-
-if __name__ == "__main__":
-    print("SHAP Model Comparison Script")
-    print("="*80)
-    print("\nTo use this script with your models:")
-    print("1. Load your trained MLR, XGBRF, and LEMBAS-RNN models")
-    print("2. Prepare your feature matrix (X) and feature names")
-    print("3. Create a models dictionary: {'MLR': mlr_model, 'XGBRF': xgbrf_model, 'LEMBAS-RNN': rnn_model}")
-    print("4. Initialize SHAPModelComparator and run analyses")
-    print("\nRunning example with synthetic data...\n")
-    
-    example_usage()
