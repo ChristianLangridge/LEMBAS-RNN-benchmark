@@ -127,7 +127,7 @@ xgbrf_y_pred = xgbrf_loaded.predict(x_test)
 print(type(xgbrf_y_pred), xgbrf_y_pred.shape)
 
 ##### loading RNN (v1, trained on uncentered data)
-loaded_RNN = load_model_from_checkpoint(
+RNN_loaded = load_model_from_checkpoint(
                 checkpoint_path='/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/RNN/signaling_model.v1.pt',
                 net_path='/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/network(full).tsv',
                 X_in_df=x_test,  # passing as df not tensors
@@ -137,9 +137,9 @@ loaded_RNN = load_model_from_checkpoint(
 
 # convert x_test to tensor and pass through model
 with torch.no_grad():  # Disable gradients for inference
-    rnn_y_pred, _ = loaded_RNN(np_to_torch(x_test, dtype=torch.float32, device='cpu'))
+    rnn_y_pred, _ = RNN_loaded(np_to_torch(x_test, dtype=torch.float32, device='cpu'))
     rnn_y_pred = rnn_y_pred.detach().cpu().numpy()
-print(type(xgbrf_y_pred), xgbrf_y_pred.shape)
+print(type(rnn_y_pred), rnn_y_pred.shape)
 
 ####################################################################################################
 
