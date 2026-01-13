@@ -13,6 +13,8 @@ import os
 import xgboost as xgb
 import pickle
 from sklearn.model_selection import train_test_split
+from RNN_reconstructor import load_model_from_checkpoint
+import torch
 
 # configuration and utilities 
 # publication-style figure settings
@@ -62,11 +64,11 @@ x = tf_expression
 y = gene_expression
 # First split: 70% train and 30% temp (test + val)
 x_train, x_temp, y_train, y_temp = train_test_split(
-    x, y, test_size=0.3, random_state=42)
+    x, y, test_size=0.3, random_state=888)
 
 # Second split: split the temp set into 20% test and 10% val (which is 2/3 and 1/3 of temp)
 x_test, x_val, y_test, y_val = train_test_split(
-    x_temp, y_temp, test_size=1/3, random_state=42)
+    x_temp, y_temp, test_size=1/3, random_state=888)
 
 # getting gene IDs into a single vector for future analysis
 y_train_gene_names = list(y_train.columns)
@@ -87,26 +89,26 @@ y_test = y_test.to_numpy()
 
 #### centering script 
 # column-wise centering for training set (each gene is a column, each row is an instance)
-x_train_col_means = x_train.mean(axis=0)
-x_train_centered = x_train - x_train_col_means
+#x_train_col_means = x_train.mean(axis=0)
+#x_train_centered = x_train - x_train_col_means
 
-y_train_col_means = y_train.mean(axis=0)
-y_train_centered = y_train - y_train_col_means
+#y_train_col_means = y_train.mean(axis=0)
+#y_train_centered = y_train - y_train_col_means
 
 # for test set 
-x_test_centered = x_test - x_train_col_means
-y_test_centered = y_test - y_train_col_means
+#x_test_centered = x_test - x_train_col_means
+#y_test_centered = y_test - y_train_col_means
 
 # for val set
-x_val_centered = x_val - x_train_col_means
-y_val_centered = y_val - y_train_col_means
+#x_val_centered = x_val - x_train_col_means
+#y_val_centered = y_val - y_train_col_means
 
 ###############################################################################################
 
 ##### loading MLR model (v2), extracting mlr_y_pred
 mlr_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/MLR/MLR_v2/MLR_model_v2.joblib'
 mlr_loaded = joblib.load(mlr_model_path)
-mlr_y_pred = mlr_loaded.predict(x_test_centered)          
+mlr_y_pred = mlr_loaded.predict(x_test)          
 print(type(mlr_y_pred), mlr_y_pred.shape)
 
 ##### loading XGBRF models (v1)
@@ -121,9 +123,23 @@ print(type(mlr_y_pred), mlr_y_pred.shape)
 ##### loading XGBRF models (v3, trained on centered data)
 xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/XGBRF/XGBRF_v3/model_multioutput_v3.joblib'
 xgbrf_loaded = joblib.load(xgbrf_model_path)
-xgbrf_y_pred = xgbrf_loaded.predict(x_test_centered)          
+xgbrf_y_pred = xgbrf_loaded.predict(x_test)          
 print(type(xgbrf_y_pred), xgbrf_y_pred.shape)
 
+##### loading RNN (v1, trained on uncentered data)
+loaded_RNN = load_model_from_checkpoint(
+                checkpoint_path='/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/RNN/signaling_model.v1.pt',
+                net_path='/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/network(full).tsv',
+                X_in_df=x_test,  # passing as df not tensors
+                y_out_df=y_test,  # passing as df not tensors
+                device='cpu',
+                use_exact_training_params=True)
+
+# convert x_test to tensor and pass through model
+with torch.no_grad():  # Disable gradients for inference
+    rnn_y_pred, _ = loaded_RNN(np_to_torch(x_test, dtype=torch.float32, device='cpu'))
+    rnn_y_pred = rnn_y_pred.detach().cpu().numpy()
+print(type(xgbrf_y_pred), xgbrf_y_pred.shape)
 
 ####################################################################################################
 
@@ -132,6 +148,7 @@ print(type(xgbrf_y_pred), xgbrf_y_pred.shape)
 predictions = {
     "MLR": mlr_y_pred,
     "XGBRFRegressor": xgbrf_y_pred,
+    "RNN": rnn_y_pred
 }
 
 ####################################################################################################
