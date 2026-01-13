@@ -28,11 +28,11 @@ combined_data = pd.concat([x, y], axis=1)
 
 # First split: 70% train and 30% temp (test + val)
 x_train, x_temp, y_train, y_temp = train_test_split(
-    x, y, test_size=0.3, random_state=42)
+    x, y, test_size=0.3, random_state=888) # changed from 42 to 888 to match training seed for RNN 13/01/26
 
 # Second split: split the temp set into 20% test and 10% val (which is 2/3 and 1/3 of temp)
 x_test, x_val, y_test, y_val = train_test_split(
-    x_temp, y_temp, test_size=1/3, random_state=42)
+    x_temp, y_temp, test_size=1/3, random_state=888) # changed from 42 to 888 to match training seed for RNN 13/01/26
 
 # For training set
 x_train = x_train.to_numpy()
