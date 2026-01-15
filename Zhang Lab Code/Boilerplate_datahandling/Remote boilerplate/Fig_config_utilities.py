@@ -76,18 +76,6 @@ x_test, x_val, y_test, y_val = train_test_split(
 # getting gene IDs into a single vector for future analysis
 y_train_gene_names = list(y_train.columns)
 
-# For training set
-x_train = x_train.to_numpy()
-y_train = y_train.to_numpy()
-
-# For validation set
-x_val = x_val.to_numpy()
-y_val = y_val.to_numpy()
-
-# For testing set
-x_test = x_test.to_numpy()
-y_test = y_test.to_numpy()
-
 ###############################################################################################
 
 #### centering script 
@@ -126,22 +114,22 @@ print(type(mlr_y_pred), mlr_y_pred.shape)
 ##### loading XGBRF models (v4, trained on uncentered data)
 xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/XGBRF/XGBRF_v4/all_models_batch_XGBRF[uncentered_FINAL].joblib'
 xgbrf_loaded = joblib.load(xgbrf_model_path)
-xgbrf_y_pred = xgbrf_loaded.predict(x_test)          
+xgbrf_y_pred = np.column_stack([model.predict(x_test) for model in xgbrf_loaded])  
 print(type(xgbrf_y_pred), xgbrf_y_pred.shape)
 
 ##### loading RNN (v1, trained on uncentered data)
 RNN_loaded = load_model_from_checkpoint(
-                checkpoint_path='/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/RNN/signaling_model.v1.pt',
+                checkpoint_path='/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/RNN/uncentered_data_RNN/signaling_model.v1.pt',
                 net_path='/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/network(full).tsv',
-                X_in_df=x_test,  # passing as df not tensors
-                y_out_df=y_test,  # passing as df not tensors
+                X_in_df=pd.DataFrame(x_test),  # passing as df not tensors
+                y_out_df=pd.DataFrame(y_test),  # passing as df not tensors
                 device='cpu',
                 use_exact_training_params=True)
 
 # convert x_test to tensor and pass through model
 with torch.no_grad():  # Disable gradients for inference
-    rnn_y_pred, _ = RNN_loaded(np_to_torch(x_test, dtype=torch.float32, device='cpu'))
-    rnn_y_pred = rnn_y_pred.detach().cpu().numpy()
+    rnn_y_pred, _ = RNN_loaded(torch.tensor(x_test.values, dtype=torch.float32))
+    rnn_y_pred = rnn_y_pred.detach().numpy()
 print(type(rnn_y_pred), rnn_y_pred.shape)
 
 ####################################################################################################
