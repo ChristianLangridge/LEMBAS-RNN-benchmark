@@ -105,8 +105,8 @@ y_test = y_test.to_numpy()
 
 ###############################################################################################
 
-##### loading MLR model (v2), extracting mlr_y_pred
-mlr_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/MLR/MLR_v2/MLR_model_v2.joblib'
+##### loading MLR model (v3, trained on uncentered data)
+mlr_model_path = 'Zhang Lab Data/Saved models/MLR/MLR_v3/MLR_model_v4(uncentered[FINAL]).joblib'
 mlr_loaded = joblib.load(mlr_model_path)
 mlr_y_pred = mlr_loaded.predict(x_test)          
 print(type(mlr_y_pred), mlr_y_pred.shape)
@@ -120,8 +120,8 @@ print(type(mlr_y_pred), mlr_y_pred.shape)
 #    models = pickle.load(f)
 #xgbrf_y_pred = np.column_stack([model.predict(x_test_centered) for model in models])
 
-##### loading XGBRF models (v3, trained on centered data)
-xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/XGBRF/XGBRF_v3/model_multioutput_v3.joblib'
+##### loading XGBRF models (v4, trained on uncentered data)
+xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/XGBRF/XGBRF_v4/all_models_batch_XGBRF[uncentered_FINAL].joblib'
 xgbrf_loaded = joblib.load(xgbrf_model_path)
 xgbrf_y_pred = xgbrf_loaded.predict(x_test)          
 print(type(xgbrf_y_pred), xgbrf_y_pred.shape)
