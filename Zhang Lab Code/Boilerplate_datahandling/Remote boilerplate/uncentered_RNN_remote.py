@@ -4,11 +4,18 @@ from sklearn.model_selection import train_test_split
 
 
 # Reading in full data files
-gene_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0)
-tf_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0)
+gene_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0, index_col=0)
+tf_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0, index_col=0)
 
-# test-train splitting
-x = tf_expression
+# Removing the 'TF' filler column I identified causing me data mismatches when loading all models up with the network.tsv 15/01/26
+tf_expression = tf_expression.drop(columns=['TF']) 
+
+# Making sure only TFs that are in the network are also in the expression data 
+net = pd.read_csv('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/network(full).tsv', sep='\t')
+network_tfs = set(net['TF'].unique())
+usable_tfs = [tf for tf in tf_expression.columns if tf in network_tfs]
+
+x = tf_expression[usable_tfs]  # now aligned with network
 y = gene_expression
 
 # saving gene IDs
