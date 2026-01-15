@@ -59,8 +59,11 @@ def set_publication_style():
 ##### loading and centering data
 
 # reading in full data files
-gene_expression = pd.read_csv(('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0)
-tf_expression = pd.read_csv(('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0)
+gene_expression = pd.read_csv(('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0, index_col=0)
+tf_expression = pd.read_csv(('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0, index_col=0)
+
+# Removing the 'TF' filler column I identified causing me data mismatches when loading all models up with the network.tsv 15/01/26
+tf_expression = tf_expression.drop(columns=['TF']) 
 
 # Split into training, testing and validation sets and into numpy arrays + combining dataframes
 x = tf_expression
