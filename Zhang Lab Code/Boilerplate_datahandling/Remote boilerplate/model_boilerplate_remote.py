@@ -26,7 +26,13 @@ tf_expression = tf_expression.drop(columns=['TF'])
 x = tf_expression
 y = gene_expression
 
-combined_data = pd.concat([x, y], axis=1)
+# Making sure only TFs that are in the network are also in the expression data 
+net = pd.read_csv('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/network(full).tsv', sep='\t')
+network_tfs = set(net['TF'].unique())
+usable_tfs = [tf for tf in tf_expression.columns if tf in network_tfs]
+
+x = tf_expression[usable_tfs]  # now aligned with network
+y = gene_expression
 
 # First split: 70% train and 30% temp (test + val)
 x_train, x_temp, y_train, y_temp = train_test_split(

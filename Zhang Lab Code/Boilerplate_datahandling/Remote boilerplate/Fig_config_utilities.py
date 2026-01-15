@@ -58,9 +58,9 @@ def set_publication_style():
 
 ##### loading and centering data
 
-# reading in full data files
-gene_expression = pd.read_csv(('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0, index_col=0)
-tf_expression = pd.read_csv(('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0, index_col=0)
+# Reading in full data files
+gene_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0, index_col=0)
+tf_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0, index_col=0)
 
 # Removing the 'TF' filler column I identified causing me data mismatches when loading all models up with the network.tsv 15/01/26
 tf_expression = tf_expression.drop(columns=['TF']) 
@@ -68,6 +68,15 @@ tf_expression = tf_expression.drop(columns=['TF'])
 # Split into training, testing and validation sets and into numpy arrays + combining dataframes
 x = tf_expression
 y = gene_expression
+
+# Making sure only TFs that are in the network are also in the expression data 
+net = pd.read_csv('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/network(full).tsv', sep='\t')
+network_tfs = set(net['TF'].unique())
+usable_tfs = [tf for tf in tf_expression.columns if tf in network_tfs]
+
+x = tf_expression[usable_tfs]  # now aligned with network
+y = gene_expression
+
 # First split: 70% train and 30% temp (test + val)
 x_train, x_temp, y_train, y_temp = train_test_split(
     x, y, test_size=0.3, random_state=888)
