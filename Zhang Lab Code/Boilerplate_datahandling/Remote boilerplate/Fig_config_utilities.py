@@ -13,8 +13,11 @@ import os
 import xgboost as xgb
 import pickle
 from sklearn.model_selection import train_test_split
-from RNN_reconstructor import load_model_from_checkpoint
 import torch
+
+import sys
+sys.path.append('/home/christianl/Zhang-Lab/Zhang Lab Code/Tuning/uncentered_RNN_tuning')
+from RNN_reconstructor import load_model_from_checkpoint
 
 # configuration and utilities 
 # publication-style figure settings
@@ -106,7 +109,7 @@ y_test = y_test.to_numpy()
 ###############################################################################################
 
 ##### loading MLR model (v3, trained on uncentered data)
-mlr_model_path = 'Zhang Lab Data/Saved models/MLR/MLR_v3/MLR_model_v4(uncentered[FINAL]).joblib'
+mlr_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/MLR/MLR_v3/MLR_model_v4(uncentered[FINAL]).joblib'
 mlr_loaded = joblib.load(mlr_model_path)
 mlr_y_pred = mlr_loaded.predict(x_test)          
 print(type(mlr_y_pred), mlr_y_pred.shape)
