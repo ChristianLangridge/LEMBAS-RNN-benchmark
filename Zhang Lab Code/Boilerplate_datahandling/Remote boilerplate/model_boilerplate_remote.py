@@ -17,24 +17,30 @@ import glob
 gene_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0, index_col=0)
 tf_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0, index_col=0)
 
-# Removing the 'TF' filler column I identified causing me data mismatches when loading all models up with the network.tsv 15/01/26
-tf_expression = tf_expression.drop(columns=['TF']) 
-
 # Making sure only TFs that are in the network are also in the expression data 
 net = pd.read_csv('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/network(full).tsv', sep='\t')
-network_tfs = set(net['TF'].unique())
-usable_tfs = [tf for tf in tf_expression.columns if tf in network_tfs]
+network_tfs = set(net['TF'].unique())      # TFs
+network_genes = set(net['Gene'].unique())  # target genes
+network_nodes = network_tfs | network_genes  # all nodes in the network.tsv
+usable_features = [tf for tf in tf_expression.columns if tf in network_nodes]
 
-x = tf_expression[usable_tfs]  # now aligned with network
+x = tf_expression[usable_features]  # aligned with tf nodes in network.tsv
 y = gene_expression
 
-# First split: 70% train and 30% temp (test + val)
-x_train, x_temp, y_train, y_temp = train_test_split(
-    x, y, test_size=0.3, random_state=888) # changed from 42 to 888 to match training seed for RNN 13/01/26
+# 80% train and 20% test
+x_train, x_test, y_train, y_test = train_test_split(
+    x, y, test_size=0.2, random_state=888) # changed from 42 to 888 to match training seed for RNN 13/01/26
 
-# Second split: split the temp set into 20% test and 10% val (which is 2/3 and 1/3 of temp)
-x_test, x_val, y_test, y_val = train_test_split(
-    x_temp, y_temp, test_size=1/3, random_state=888) # changed from 42 to 888 to match training seed for RNN 13/01/26
+
+#x_train.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/training/x_train(Christian).csv", sep='\t', encoding='utf-8', index=True)
+#y_train.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/training/y_train(Christian).csv", sep='\t', encoding='utf-8', index=True)
+
+#x_test.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/testing/x_test(Christian).csv", sep='\t', encoding='utf-8', index=True)
+#y_test.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/testing/y_test(Christian).csv", sep='\t', encoding='utf-8', index=True)
+
+#x_val.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/validation/x_valChristian).csv", sep='\t', encoding='utf-8', index=True)
+#y_val.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/validation/y_val(Christian).csv", sep='\t', encoding='utf-8', index=True)
+
 
 # For training set
 x_train = x_train.to_numpy()
@@ -47,3 +53,4 @@ y_val = y_val.to_numpy()
 # For testing set
 x_test = x_test.to_numpy()
 y_test = y_test.to_numpy()
+
