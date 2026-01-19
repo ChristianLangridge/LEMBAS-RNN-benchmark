@@ -38,17 +38,9 @@ x_train, x_test, y_train, y_test = train_test_split(
 #x_test.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/testing/x_test(Christian).csv", sep='\t', encoding='utf-8', index=True)
 #y_test.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/testing/y_test(Christian).csv", sep='\t', encoding='utf-8', index=True)
 
-#x_val.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/validation/x_valChristian).csv", sep='\t', encoding='utf-8', index=True)
-#y_val.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/validation/y_val(Christian).csv", sep='\t', encoding='utf-8', index=True)
-
-
 # For training set
 x_train = x_train.to_numpy()
 y_train = y_train.to_numpy()
-
-# For validation set
-x_val = x_val.to_numpy()
-y_val = y_val.to_numpy()
 
 # For testing set
 x_test = x_test.to_numpy()
