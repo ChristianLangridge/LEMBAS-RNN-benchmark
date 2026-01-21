@@ -165,37 +165,27 @@ def compute_metrics(y_true, y_pred):
     }
     
 # same as computer_metrics, but at per-gene resolution
-def compute_metrics_per_gene(y_true_df, y_pred_array):
-    """
-    Compute per-gene metrics with gene names preserved.
-    
-    Parameters
-    ----------
-    y_true_df : pd.DataFrame
-        True values with gene names as columns
-    y_pred_array : np.ndarray
-        Predictions (same shape as y_true_df.values)
-    """
+def compute_metrics_per_gene_test(y_true_df, y_pred_array):
+    """Compute per-gene metrics."""
     n_genes = y_true_df.shape[1]
     results = []
-
-    for i, gene_name in enumerate(y_true_df.columns):  # ← Use actual gene names!
+    
+    for i, gene_name in enumerate(y_true_df.columns):
         y_t = y_true_df.iloc[:, i].values
         y_p = y_pred_array[:, i]
-    
+        
         if np.var(y_t) > 1e-10:
             pearson_r, p_value = pearsonr(y_t, y_p)
             r2 = r2_score(y_t, y_p)
-        
+            
             results.append({
-                'gene': gene_name,  # ← Biological ID preserved!
+                'gene': gene_name,
                 'gene_idx': i,
                 'r2': r2,
                 'pearson_r': pearson_r,
-                'p_value': p_value,
-                # ...
+                'p_value': p_value
             })
-
+    
     return pd.DataFrame(results)
 
 
