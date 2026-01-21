@@ -77,12 +77,12 @@ x_train, x_test, y_train, y_test = train_test_split(
     x, y, test_size=0.2, random_state=888) # changed from 42 to 888 to match training seed for RNN 13/01/26
 
 # For training set
-x_train = x_train.to_numpy()
-y_train = y_train.to_numpy()
+#x_train = x_train.to_numpy()
+#y_train = y_train.to_numpy()
 
 # For testing set
-x_test = x_test.to_numpy()
-y_test = y_test.to_numpy()
+#x_test = x_test.to_numpy()
+#y_test = y_test.to_numpy()
 
 ###############################################################################################
 
@@ -127,7 +127,7 @@ RNN_loaded = load_model_from_checkpoint(
 
 # convert x_test to tensor and pass through model
 with torch.no_grad():  # Disable gradients for inference
-    rnn_y_pred, _ = RNN_loaded(torch.tensor(x_test.values, dtype=torch.float32))
+    rnn_y_pred, _ = RNN_loaded(RNN_loaded.X_in)
     rnn_y_pred = rnn_y_pred.detach().numpy()
 print(type(rnn_y_pred), rnn_y_pred.shape)
 
@@ -165,29 +165,36 @@ def compute_metrics(y_true, y_pred):
     }
     
 # same as computer_metrics, but at per-gene resolution
-def compute_metrics_per_gene(y_true, y_pred):
-    """Compute metrics for each gene separately (recommended for multi-output)."""   
-    n_genes = y_true.shape[1]
+
+def compute_metrics_per_gene(y_true_df, y_pred_array):
+    """
+    Compute per-gene metrics with gene names preserved.
+    
+    Parameters
+    ----------
+    y_true_df : pd.DataFrame
+        True values with gene names as columns
+    y_pred_array : np.ndarray
+        Predictions (same shape as y_true_df.values)
+    """
+    n_genes = y_true_df.shape[1]
     results = []
     
-    for gene_idx in range(n_genes):
-        y_t = y_true[:, gene_idx]
-        y_p = y_pred[:, gene_idx]
+    for i, gene_name in enumerate(y_true_df.columns):  # ← Use actual gene names!
+        y_t = y_true_df.iloc[:, i].values
+        y_p = y_pred_array[:, i]
         
-        # Skip genes with no variance
         if np.var(y_t) > 1e-10:
             pearson_r, p_value = pearsonr(y_t, y_p)
             r2 = r2_score(y_t, y_p)
-            rmse = np.sqrt(mean_squared_error(y_t, y_p))
-            mae = mean_absolute_error(y_t, y_p)
             
             results.append({
-                'gene_idx': gene_idx,
+                'gene': gene_name,  # ← Biological ID preserved!
+                'gene_idx': i,
                 'r2': r2,
                 'pearson_r': pearson_r,
                 'p_value': p_value,
-                'rmse': rmse,
-                'mae': mae
+                # ...
             })
     
     return pd.DataFrame(results)
