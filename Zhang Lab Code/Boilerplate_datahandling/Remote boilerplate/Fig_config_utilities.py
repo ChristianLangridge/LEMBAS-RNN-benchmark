@@ -56,38 +56,33 @@ def set_publication_style():
 
 ##### getting y_test and each model's y_pred  
 
-##### loading and centering data
+##### loading data
 
 # Reading in full data files
 gene_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0, index_col=0)
 tf_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0, index_col=0)
 
-# Removing the 'TF' filler column I identified causing me data mismatches when loading all models up with the network.tsv 15/01/26
-tf_expression = tf_expression.drop(columns=['TF']) 
-
-# Split into training, testing and validation sets and into numpy arrays + combining dataframes
-x = tf_expression
-y = gene_expression
-
 # Making sure only TFs that are in the network are also in the expression data 
 net = pd.read_csv('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/network(full).tsv', sep='\t')
-network_tfs = set(net['TF'].unique())
-usable_tfs = [tf for tf in tf_expression.columns if tf in network_tfs]
+network_tfs = set(net['TF'].unique())      # TFs
+network_genes = set(net['Gene'].unique())  # target genes
+network_nodes = network_tfs | network_genes  # all nodes in the network.tsv
+usable_features = [tf for tf in tf_expression.columns if tf in network_nodes]
 
-x = tf_expression[usable_tfs]  # now aligned with network
+x = tf_expression[usable_features]  # aligned with tf nodes in network.tsv
 y = gene_expression
 
-# First split: 70% train and 30% temp (test + val)
-x_train, x_temp, y_train, y_temp = train_test_split(
-    x, y, test_size=0.3, random_state=888)
+# 80% train and 20% test
+x_train, x_test, y_train, y_test = train_test_split(
+    x, y, test_size=0.2, random_state=888) # changed from 42 to 888 to match training seed for RNN 13/01/26
 
-# Second split: split the temp set into 20% test and 10% val (which is 2/3 and 1/3 of temp)
-x_test, x_val, y_test, y_val = train_test_split(
-    x_temp, y_temp, test_size=1/3, random_state=888)
+# For training set
+x_train = x_train.to_numpy()
+y_train = y_train.to_numpy()
 
-# getting gene IDs into a single vector for future analysis
-y_train_gene_names = list(y_train.columns)
-
+# For testing set
+x_test = x_test.to_numpy()
+y_test = y_test.to_numpy()
 
 ###############################################################################################
 
@@ -109,23 +104,14 @@ y_train_gene_names = list(y_train.columns)
 
 ###############################################################################################
 
-##### loading MLR model (v3, trained on uncentered data)
+##### loading MLR model (v3, trained on uncentered data, unified preprocessing)
 mlr_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/MLR/MLR_v3/MLR_model_v4(uncentered[FINAL]).joblib'
 mlr_loaded = joblib.load(mlr_model_path)
 mlr_y_pred = mlr_loaded.predict(x_test)          
 print(type(mlr_y_pred), mlr_y_pred.shape)
 
-##### loading XGBRF models (v1)
-#xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/Random Forest/Saved_Models_XGBRF_v1.pkl'
-# find all saved models, compute xgbrf_y_pred (trained on uncentered data unlike MLR
-# so need to keep it as x_test to avoid destroying performance) --> ultimately decided 
-# to universally use centered data and just retrain XGBRFRegressor() on x_test_centered (19/12/25)
-#with open(xgbrf_model_path, 'rb') as f:
-#    models = pickle.load(f)
-#xgbrf_y_pred = np.column_stack([model.predict(x_test_centered) for model in models])
-
-##### loading XGBRF models (v4, trained on uncentered data)
-xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/XGBRF/XGBRF_v4/all_models_batch_XGBRF[uncentered_FINAL].joblib'
+##### loading XGBRF models (v4, trained on uncentered data, unified preprocessing)
+xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/XGBRF/XGBRF_v5/all_models_batch_XGBRF[uncentered_REALFINAL].joblib'
 xgbrf_loaded = joblib.load(xgbrf_model_path)
 xgbrf_y_pred = np.column_stack([model.predict(x_test) for model in xgbrf_loaded])  
 print(type(xgbrf_y_pred), xgbrf_y_pred.shape)
