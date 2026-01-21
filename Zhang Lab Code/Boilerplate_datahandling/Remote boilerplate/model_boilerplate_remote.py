@@ -31,7 +31,6 @@ y = gene_expression
 x_train, x_test, y_train, y_test = train_test_split(
     x, y, test_size=0.2, random_state=888) # changed from 42 to 888 to match training seed for RNN 13/01/26
 
-
 #x_train.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/training/x_train(Christian).csv", sep='\t', encoding='utf-8', index=True)
 #y_train.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/training/y_train(Christian).csv", sep='\t', encoding='utf-8', index=True)
 
