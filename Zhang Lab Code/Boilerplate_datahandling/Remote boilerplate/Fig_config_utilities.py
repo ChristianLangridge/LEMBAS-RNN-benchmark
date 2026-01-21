@@ -25,7 +25,7 @@ from RNN_reconstructor import load_model_from_checkpoint
 MODEL_COLORS = {
     'RNN': '#1f77b4',           # Deep blue
     'XGBRFRegressor': '#ff7f0e', # Orange
-    'Linear': '#2ca02c'          # Green
+    'MLR': '#2ca02c'          # Green
 }
 
 DPI = 300
