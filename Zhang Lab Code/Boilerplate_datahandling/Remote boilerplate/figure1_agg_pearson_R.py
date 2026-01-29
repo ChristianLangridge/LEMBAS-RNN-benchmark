@@ -33,15 +33,25 @@ def set_publication_style():
         'ytick.major.size': 5,
     })
 
-
 def figure_pearson_r_comparison_fast(y_true, predictions_dict, 
                                      ci_method='poisson_bootstrap_vectorized',
                                      n_bootstrap=5000,
+                                     chunk_size=500,  # Process 500 bootstrap iterations at a time
                                      output_path='...'):
     """
-    Ultra-fast bootstrap using fully vectorized operations.
+    Ultra-fast bootstrap using chunked vectorized operations for memory efficiency.
     
-    Speed improvement: ~50-100x faster than loop-based bootstrap
+    For large datasets (>10M observations), processes bootstrap in chunks to avoid
+    creating massive weight matrices while maintaining vectorization speedup.
+    
+    Parameters
+    ----------
+    chunk_size : int, default=500
+        Number of bootstrap iterations to process at once
+        Adjust based on available memory:
+        - 100: ~2GB memory
+        - 500: ~10GB memory  
+        - 1000: ~20GB memory
     """
     
     set_publication_style()
@@ -59,42 +69,56 @@ def figure_pearson_r_comparison_fast(y_true, predictions_dict,
         y_true_flat = np.asarray(y_true).ravel()
         y_pred_flat = np.asarray(y_pred).ravel()
         
+        n_samples = len(y_true_flat)
+        print(f"\nDataset size: {n_samples:,} observations ({n_samples*8/1e9:.2f} GB as float64)")
+        
         # Compute point estimate
         pearson_r, p_value = pearsonr(y_true_flat, y_pred_flat)
         pearson_rs.append(pearson_r)
         p_values.append(p_value)
         
-        # Vectorized Poisson Bootstrap
+        # Chunked Vectorized Poisson Bootstrap
         if ci_method == 'poisson_bootstrap_vectorized':
-            print(f"Computing vectorized Poisson bootstrap CI for {model_name} ({n_bootstrap} iterations)...")
+            print(f"Computing chunked vectorized Poisson bootstrap for {model_name}")
+            print(f"  {n_bootstrap:,} iterations in chunks of {chunk_size}")
             
-            n_samples = len(y_true_flat)
+            bootstrap_rs = []
+            n_chunks = int(np.ceil(n_bootstrap / chunk_size))
+            
             np.random.seed(42)
             
-            # Generate ALL Poisson weights at once: shape (n_bootstrap, n_samples)
-            weights = np.random.poisson(lam=1, size=(n_bootstrap, n_samples))
+            for chunk_idx in range(n_chunks):
+                chunk_start = chunk_idx * chunk_size
+                chunk_end = min((chunk_idx + 1) * chunk_size, n_bootstrap)
+                chunk_n = chunk_end - chunk_start
+                
+                # Generate weights for this chunk only
+                # Shape: (chunk_n, n_samples) - much more manageable!
+                weights = np.random.poisson(lam=1, size=(chunk_n, n_samples))
+                
+                chunk_memory = weights.nbytes / 1e9
+                print(f"  Chunk {chunk_idx+1}/{n_chunks}: processing {chunk_n} iterations "
+                      f"(~{chunk_memory:.2f} GB)")
+                
+                # Vectorized computation for this chunk
+                w_sum = weights.sum(axis=1, keepdims=True)
+                w_mean_true = (weights * y_true_flat).sum(axis=1, keepdims=True) / w_sum
+                w_mean_pred = (weights * y_pred_flat).sum(axis=1, keepdims=True) / w_sum
+                
+                y_true_centered = y_true_flat - w_mean_true
+                y_pred_centered = y_pred_flat - w_mean_pred
+                
+                cov = (weights * y_true_centered * y_pred_centered).sum(axis=1) / w_sum.ravel()
+                std_true = np.sqrt((weights * y_true_centered**2).sum(axis=1) / w_sum.ravel())
+                std_pred = np.sqrt((weights * y_pred_centered**2).sum(axis=1) / w_sum.ravel())
+                
+                chunk_rs = cov / (std_true * std_pred)
+                bootstrap_rs.extend(chunk_rs)
+                
+                # Free memory
+                del weights
             
-            # Vectorized weighted correlation computation
-            # Broadcast for all bootstrap samples simultaneously
-            w_sum = weights.sum(axis=1, keepdims=True)  # (n_bootstrap, 1)
-            
-            # Weighted means
-            w_mean_true = (weights * y_true_flat).sum(axis=1, keepdims=True) / w_sum
-            w_mean_pred = (weights * y_pred_flat).sum(axis=1, keepdims=True) / w_sum
-            
-            # Center the data
-            y_true_centered = y_true_flat - w_mean_true  # Broadcasting
-            y_pred_centered = y_pred_flat - w_mean_pred
-            
-            # Weighted covariance and standard deviations (vectorized)
-            cov = (weights * y_true_centered * y_pred_centered).sum(axis=1) / w_sum.ravel()
-            std_true = np.sqrt((weights * y_true_centered**2).sum(axis=1) / w_sum.ravel())
-            std_pred = np.sqrt((weights * y_pred_centered**2).sum(axis=1) / w_sum.ravel())
-            
-            # Weighted Pearson's R for all bootstrap samples
-            bootstrap_rs = cov / (std_true * std_pred)
-            
-            # 95% CI
+            bootstrap_rs = np.array(bootstrap_rs)
             ci_lower = np.percentile(bootstrap_rs, 2.5)
             ci_upper = np.percentile(bootstrap_rs, 97.5)
             
@@ -104,9 +128,7 @@ def figure_pearson_r_comparison_fast(y_true, predictions_dict,
         ci_lowers.append(ci_lower)
         ci_uppers.append(ci_upper)
         
-        print(f"{model_name}: Pearson's R = {pearson_r:.4f} [{ci_lower:.4f}, {ci_upper:.4f}], p < 0.001")
-    
-    # [Rest of plotting code remains the same...]
+        print(f"\n{model_name}: Pearson's R = {pearson_r:.4f} [{ci_lower:.4f}, {ci_upper:.4f}], p < 0.001")
     
     # Create figure
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -143,7 +165,7 @@ def figure_pearson_r_comparison_fast(y_true, predictions_dict,
     ax.grid(True, alpha=0.3, axis='y')
     ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.5)
     
-    method_text = f"95% CI via vectorized Poisson bootstrap ({n_bootstrap:,} iterations)"
+    method_text = f"95% CI via chunked vectorized Poisson bootstrap ({n_bootstrap:,} iterations, chunk_size={chunk_size})"
     fig.text(0.5, 0.02, method_text, ha='center', fontsize=9, style='italic')
     
     plt.tight_layout()
@@ -162,8 +184,6 @@ def figure_pearson_r_comparison_fast(y_true, predictions_dict,
         }
     
     return metrics_summary
-
-
 
 
 # Alternative version: Per-gene Pearson's R distribution with VECTORIZED bootstrap CI
@@ -442,4 +462,11 @@ def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
         ax.legend(loc='lower right', fontsize=9)
     
     plt.tight_layout()
-    plt.savefig(output_path,
+    plt.savefig(output_path, dpi=DPI, bbox_inches='tight')
+    print(f"\nFigure saved to {output_path}")
+    plt.show()
+    
+    # Add summary statistics to return DataFrame
+    summary_df = pd.DataFrame(summary_stats).T
+    
+    return df_per_gene, summary_df
