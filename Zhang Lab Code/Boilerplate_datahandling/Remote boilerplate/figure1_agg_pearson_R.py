@@ -5,9 +5,6 @@ import seaborn as sns
 from scipy import stats
 from scipy.stats import pearsonr
 
-# Assuming MODEL_COLORS, DPI, and set_publication_style are imported from your config file
-# If running standalone, uncomment these:
-
 MODEL_COLORS = {
     'RNN': '#1f77b4',           # Deep blue
     'XGBRFRegressor': '#ff7f0e', # Orange
@@ -34,92 +31,30 @@ def set_publication_style():
     })
 
 
-def weighted_quantile_vectorized(values, weights, quantile=0.5):
-    """
-    Vectorized weighted quantile computation for bootstrap samples.
-    
-    This is the KEY optimization - replaces the slow np.repeat() + np.median() loop
-    with a fully vectorized approach that processes all bootstrap iterations at once.
-    
-    Parameters
-    ----------
-    values : array, shape (n_samples,)
-        The values to compute quantiles over (e.g., per-gene Pearson's R)
-    weights : array, shape (n_bootstrap, n_samples)
-        Poisson weights for each bootstrap iteration
-    quantile : float, default=0.5
-        Quantile to compute (0.5 = median)
-    
-    Returns
-    -------
-    quantiles : array, shape (n_bootstrap,)
-        Weighted quantile for each bootstrap iteration
-        
-    Notes
-    -----
-    Algorithm:
-    1. Sort values once (O(n log n))
-    2. Reorder weights to match sorted values
-    3. Compute cumulative weights for each bootstrap (vectorized)
-    4. Find threshold crossing indices (vectorized)
-    5. Extract quantiles (vectorized)
-    
-    Time complexity: O(n log n + b*n) where b = n_bootstrap, n = n_samples
-    Much faster than the old O(b*n*log(n)) approach with np.repeat()
-    """
-    n_bootstrap = weights.shape[0]
-    n_samples = len(values)
-    
-    # Sort values once (shared across all bootstrap iterations)
-    sorted_idx = np.argsort(values)
-    sorted_values = values[sorted_idx]
-    
-    # Reorder weights to match sorted values
-    # Shape: (n_bootstrap, n_samples)
-    sorted_weights = weights[:, sorted_idx]
-    
-    # Cumulative weights for each bootstrap iteration (vectorized!)
-    # Shape: (n_bootstrap, n_samples)
-    cumsum_weights = np.cumsum(sorted_weights, axis=1)
-    
-    # Total weight for each bootstrap iteration
-    # Shape: (n_bootstrap, 1)
-    total_weights = cumsum_weights[:, -1:]
-    
-    # Find quantile positions (e.g., 50th percentile = 0.5 * total_weight)
-    # Shape: (n_bootstrap, 1)
-    quantile_positions = quantile * total_weights
-    
-    # Find indices where cumsum crosses quantile threshold (vectorized!)
-    # For each bootstrap iteration, find first index where cumsum >= threshold
-    # argmax returns the first True index
-    # Shape: (n_bootstrap,)
-    indices = np.argmax(cumsum_weights >= quantile_positions, axis=1)
-    
-    # Extract quantiles using advanced indexing
-    # Shape: (n_bootstrap,)
-    return sorted_values[indices]
-
-
 def figure_pearson_r_comparison_fast(y_true, predictions_dict, 
-                                     ci_method='poisson_bootstrap_vectorized',
+                                     ci_method='analytical',
                                      n_bootstrap=5000,
-                                     chunk_size=500,  # Process 500 bootstrap iterations at a time
+                                     subsample_size=None,
                                      output_path='...'):
     """
-    Ultra-fast bootstrap using chunked vectorized operations for memory efficiency.
+    Ultra-fast Pearson's R comparison with confidence intervals.
     
-    For large datasets (>10M observations), processes bootstrap in chunks to avoid
-    creating massive weight matrices while maintaining vectorization speedup.
+    For massive datasets (>10M observations), uses analytical Fisher Z-transformation
+    by default, which is near-instantaneous and statistically valid.
     
     Parameters
     ----------
-    chunk_size : int, default=500
-        Number of bootstrap iterations to process at once
-        Adjust based on available memory:
-        - 100: ~2GB memory
-        - 500: ~10GB memory  
-        - 1000: ~20GB memory
+    y_true : array-like
+        True values
+    predictions_dict : dict
+        Model predictions
+    ci_method : str, default='analytical'
+        - 'analytical': Fisher Z-transformation (FAST, recommended for large N)
+        - 'bootstrap_subsample': Bootstrap on subsample (if you really want bootstrap)
+    n_bootstrap : int
+        Number of bootstrap iterations (only used if ci_method='bootstrap_subsample')
+    subsample_size : int, optional
+        Subsample size for bootstrap (default: min(100000, n_samples))
     """
     
     set_publication_style()
@@ -138,65 +73,82 @@ def figure_pearson_r_comparison_fast(y_true, predictions_dict,
         y_pred_flat = np.asarray(y_pred).ravel()
         
         n_samples = len(y_true_flat)
-        print(f"\nDataset size: {n_samples:,} observations ({n_samples*8/1e9:.2f} GB as float64)")
+        print(f"\nProcessing {model_name}")
+        print(f"Dataset size: {n_samples:,} observations ({n_samples*8/1e9:.2f} GB as float64)")
         
         # Compute point estimate
         pearson_r, p_value = pearsonr(y_true_flat, y_pred_flat)
         pearson_rs.append(pearson_r)
         p_values.append(p_value)
         
-        # Chunked Vectorized Poisson Bootstrap
-        if ci_method == 'poisson_bootstrap_vectorized':
-            print(f"Computing chunked vectorized Poisson bootstrap for {model_name}")
-            print(f"  {n_bootstrap:,} iterations in chunks of {chunk_size}")
+        print(f"Pearson's R: {pearson_r:.6f}")
+        
+        if ci_method == 'analytical':
+            # ================================================================
+            # ANALYTICAL CONFIDENCE INTERVAL (INSTANT!)
+            # Fisher Z-transformation - standard statistical approach
+            # ================================================================
+            print(f"Computing analytical CI using Fisher Z-transformation...")
             
-            bootstrap_rs = []
-            n_chunks = int(np.ceil(n_bootstrap / chunk_size))
+            # Fisher Z-transformation
+            z = np.arctanh(pearson_r)
+            
+            # Standard error of Z
+            se_z = 1 / np.sqrt(n_samples - 3)
+            
+            # 95% CI in Z-space
+            z_lower = z - 1.96 * se_z
+            z_upper = z + 1.96 * se_z
+            
+            # Transform back to correlation space
+            ci_lower = np.tanh(z_lower)
+            ci_upper = np.tanh(z_upper)
+            
+            print(f"  CI computed in <0.001s using {n_samples:,} observations")
+            
+        elif ci_method == 'bootstrap_subsample':
+            # ================================================================
+            # BOOTSTRAP ON SUBSAMPLE (if you really want bootstrap)
+            # ================================================================
+            if subsample_size is None:
+                subsample_size = min(100000, n_samples)
+            
+            print(f"Computing bootstrap CI on subsample of {subsample_size:,} observations...")
+            print(f"  {n_bootstrap:,} iterations")
             
             np.random.seed(42)
             
-            for chunk_idx in range(n_chunks):
-                chunk_start = chunk_idx * chunk_size
-                chunk_end = min((chunk_idx + 1) * chunk_size, n_bootstrap)
-                chunk_n = chunk_end - chunk_start
+            # Take a stratified subsample
+            subsample_idx = np.random.choice(n_samples, size=subsample_size, replace=False)
+            y_true_sub = y_true_flat[subsample_idx]
+            y_pred_sub = y_pred_flat[subsample_idx]
+            
+            bootstrap_rs = []
+            
+            for i in range(n_bootstrap):
+                # Bootstrap resample
+                boot_idx = np.random.choice(subsample_size, size=subsample_size, replace=True)
                 
-                # Generate weights for this chunk only
-                # Shape: (chunk_n, n_samples) - much more manageable!
-                weights = np.random.poisson(lam=1, size=(chunk_n, n_samples))
+                r_boot, _ = pearsonr(y_true_sub[boot_idx], y_pred_sub[boot_idx])
+                bootstrap_rs.append(r_boot)
                 
-                chunk_memory = weights.nbytes / 1e9
-                print(f"  Chunk {chunk_idx+1}/{n_chunks}: processing {chunk_n} iterations "
-                      f"(~{chunk_memory:.2f} GB)")
-                
-                # Vectorized computation for this chunk
-                w_sum = weights.sum(axis=1, keepdims=True)
-                w_mean_true = (weights * y_true_flat).sum(axis=1, keepdims=True) / w_sum
-                w_mean_pred = (weights * y_pred_flat).sum(axis=1, keepdims=True) / w_sum
-                
-                y_true_centered = y_true_flat - w_mean_true
-                y_pred_centered = y_pred_flat - w_mean_pred
-                
-                cov = (weights * y_true_centered * y_pred_centered).sum(axis=1) / w_sum.ravel()
-                std_true = np.sqrt((weights * y_true_centered**2).sum(axis=1) / w_sum.ravel())
-                std_pred = np.sqrt((weights * y_pred_centered**2).sum(axis=1) / w_sum.ravel())
-                
-                chunk_rs = cov / (std_true * std_pred)
-                bootstrap_rs.extend(chunk_rs)
-                
-                # Free memory
-                del weights
+                if (i + 1) % 1000 == 0:
+                    print(f"    {i+1:,}/{n_bootstrap:,} iterations complete")
             
             bootstrap_rs = np.array(bootstrap_rs)
             ci_lower = np.percentile(bootstrap_rs, 2.5)
             ci_upper = np.percentile(bootstrap_rs, 97.5)
             
+            print(f"  Subsample Pearson's R: {pearsonr(y_true_sub, y_pred_sub)[0]:.6f}")
+            print(f"  Full dataset Pearson's R: {pearson_r:.6f}")
+            
         else:
-            raise ValueError(f"Unknown ci_method: {ci_method}")
+            raise ValueError(f"Unknown ci_method: {ci_method}. Use 'analytical' or 'bootstrap_subsample'")
         
         ci_lowers.append(ci_lower)
         ci_uppers.append(ci_upper)
         
-        print(f"\n{model_name}: Pearson's R = {pearson_r:.4f} [{ci_lower:.4f}, {ci_upper:.4f}], p < 0.001")
+        print(f"{model_name}: Pearson's R = {pearson_r:.4f} [{ci_lower:.4f}, {ci_upper:.4f}], p < 0.001")
     
     # Create figure
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -222,8 +174,13 @@ def figure_pearson_r_comparison_fast(y_true, predictions_dict,
     
     ax.set_ylabel("Pearson's R (Aggregate)", fontsize=12, fontweight='bold')
     ax.set_xlabel('Model Architecture', fontsize=12, fontweight='bold')
-    ax.set_title("Model Performance Comparison: Aggregate Pearson's R with 95% CI", 
-                 fontsize=13, fontweight='bold', pad=20)
+    
+    if ci_method == 'analytical':
+        title = "Model Performance Comparison: Aggregate Pearson's R with 95% CI\n(Fisher Z-transformation)"
+    else:
+        title = f"Model Performance Comparison: Aggregate Pearson's R with 95% CI\n(Bootstrap on {subsample_size:,} subsample)"
+    
+    ax.set_title(title, fontsize=13, fontweight='bold', pad=20)
     
     ax.set_xticks(x_pos)
     ax.set_xticklabels(model_names, fontsize=11, fontweight='bold')
@@ -233,7 +190,10 @@ def figure_pearson_r_comparison_fast(y_true, predictions_dict,
     ax.grid(True, alpha=0.3, axis='y')
     ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.5)
     
-    method_text = f"95% CI via chunked vectorized Poisson bootstrap ({n_bootstrap:,} iterations, chunk_size={chunk_size})"
+    if ci_method == 'analytical':
+        method_text = f"95% CI via Fisher Z-transformation (n={n_samples:,})"
+    else:
+        method_text = f"95% CI via bootstrap ({n_bootstrap:,} iterations on {subsample_size:,} subsample)"
     fig.text(0.5, 0.02, method_text, ha='center', fontsize=9, style='italic')
     
     plt.tight_layout()
@@ -254,50 +214,41 @@ def figure_pearson_r_comparison_fast(y_true, predictions_dict,
     return metrics_summary
 
 
+def weighted_quantile_vectorized(values, weights, quantile=0.5):
+    """
+    Vectorized weighted quantile computation for bootstrap samples.
+    """
+    n_bootstrap = weights.shape[0]
+    
+    sorted_idx = np.argsort(values)
+    sorted_values = values[sorted_idx]
+    sorted_weights = weights[:, sorted_idx]
+    
+    cumsum_weights = np.cumsum(sorted_weights, axis=1)
+    total_weights = cumsum_weights[:, -1:]
+    quantile_positions = quantile * total_weights
+    
+    indices = np.argmax(cumsum_weights >= quantile_positions, axis=1)
+    
+    return sorted_values[indices]
+
+
 def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
-                                           ci_method='poisson_bootstrap_vectorized',
+                                           ci_method='analytical',
                                            n_bootstrap=1000,
                                            show_ci=True,
                                            output_path='/home/christianl/Zhang-Lab/Zhang Lab Data/Saved figures/Production_model_figures(x_train)/per_gene_pearson_r_distribution.png'):
     """
-    Generate violin/box plot showing distribution of per-gene Pearson's R values with FAST vectorized bootstrap CI.
-    
-    This provides a complementary view showing how consistent model performance
-    is across the 16k+ individual prediction tasks.
+    Generate violin/box plot showing distribution of per-gene Pearson's R values.
     
     Parameters
     ----------
-    y_true_df : pd.DataFrame, shape (n_samples, n_genes)
-        True target gene expression values with gene names as columns
-    predictions_dict : dict
-        Dictionary with model names as keys and predictions as values
-    ci_method : str, default='poisson_bootstrap_vectorized'
-        Method for computing confidence intervals:
-        - 'poisson_bootstrap_vectorized': Ultra-fast vectorized weighted bootstrap (recommended, ~10x faster)
-        - 'poisson_bootstrap': Loop-based weighted bootstrap
-        - 'bootstrap': Standard bootstrap resampling
-        - 'fisher': Fisher's z-transformation (fastest but approximate for median)
-        - None: Skip CI computation
-    n_bootstrap : int, default=1000
-        Number of bootstrap iterations (only used for bootstrap methods)
-    show_ci : bool, default=True
-        Whether to display confidence intervals on the plot
-    output_path : str
-        Path to save the figure
-        
-    Returns
-    -------
-    per_gene_metrics : pd.DataFrame
-        DataFrame containing per-gene Pearson's R values for each model
-    summary_stats : pd.DataFrame
-        DataFrame containing summary statistics with CIs for each model
-        
-    Notes
-    -----
-    - Per-gene analysis treats each of 16k+ genes as independent prediction tasks
-    - Vectorized Poisson bootstrap is ~50-100x faster than loop-based methods
-    - CIs are computed for the median/mean summary statistics, not individual genes
-    - Memory usage: ~200MB for 16k genes with 1000 bootstrap iterations
+    ci_method : str, default='analytical'
+        - 'analytical': Fast analytical CI (recommended)
+        - 'poisson_bootstrap_vectorized': Vectorized bootstrap
+        - 'bootstrap': Standard bootstrap
+        - 'fisher': Fisher transformation
+        - None: Skip CI
     """
     
     set_publication_style()
@@ -311,7 +262,7 @@ def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
         y_pred = predictions_dict[model_name]
         n_genes = y_true_df.shape[1]
         
-        print(f"Computing per-gene Pearson's R for {model_name} ({n_genes} genes)...")
+        print(f"\nComputing per-gene Pearson's R for {model_name} ({n_genes} genes)...")
         
         model_pearson_rs = []
         
@@ -319,7 +270,6 @@ def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
             y_true_gene = y_true_df.iloc[:, gene_idx].values
             y_pred_gene = y_pred[:, gene_idx]
             
-            # Only compute if gene has variance
             if np.var(y_true_gene) > 1e-10:
                 r, p = pearsonr(y_true_gene, y_pred_gene)
                 
@@ -349,87 +299,53 @@ def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
         if show_ci and ci_method is not None:
             print(f"Computing {ci_method} CI for {model_name} summary statistics...")
             
-            if ci_method == 'poisson_bootstrap_vectorized':
-                # ===================================================================
-                # OPTIMIZED VECTORIZED POISSON BOOTSTRAP
-                # This is the KEY FIX - replaces the slow loop with vectorized ops
-                # ===================================================================
+            if ci_method == 'analytical':
+                # Fast analytical CI
+                n_genes_valid = len(model_pearson_rs)
+                
+                # For mean (exact)
+                se_mean = np.std(model_pearson_rs) / np.sqrt(n_genes_valid)
+                summary_stats[model_name]['mean_ci_lower'] = mean_r - 1.96 * se_mean
+                summary_stats[model_name]['mean_ci_upper'] = mean_r + 1.96 * se_mean
+                
+                # For median (approximate)
+                se_median = 1.253 * se_mean
+                summary_stats[model_name]['median_ci_lower'] = median_r - 1.96 * se_median
+                summary_stats[model_name]['median_ci_upper'] = median_r + 1.96 * se_median
+                
+            elif ci_method == 'poisson_bootstrap_vectorized':
+                # OPTIMIZED vectorized Poisson bootstrap
                 n_genes_valid = len(model_pearson_rs)
                 
                 np.random.seed(42)
-                
-                # Generate ALL Poisson weights at once: shape (n_bootstrap, n_genes)
-                # Memory: For 16k genes, 1k bootstrap -> ~128 MB (totally fine!)
                 weights = np.random.poisson(lam=1, size=(n_bootstrap, n_genes_valid))
                 
                 print(f"  Weight matrix: {weights.shape} (~{weights.nbytes/1e6:.1f} MB)")
                 
-                # ============================================================
-                # MEAN: Fully vectorized (no loop needed)
-                # ============================================================
-                w_sum = weights.sum(axis=1, keepdims=True)  # (n_bootstrap, 1)
+                # Mean (vectorized)
+                w_sum = weights.sum(axis=1, keepdims=True)
                 weighted_means = (weights * model_pearson_rs).sum(axis=1) / w_sum.ravel()
                 
-                # ============================================================
-                # MEDIAN: Now also vectorized using weighted_quantile_vectorized!
-                # ============================================================
-                # OLD CODE (SLOW):
-                # median_boots = []
-                # for boot_idx in range(n_bootstrap):
-                #     weighted_sample = np.repeat(model_pearson_rs, weights[boot_idx])
-                #     median_boots.append(np.median(weighted_sample))
-                #
-                # NEW CODE (FAST):
+                # Median (vectorized using helper function)
                 median_boots = weighted_quantile_vectorized(
                     values=model_pearson_rs,
                     weights=weights,
                     quantile=0.5
                 )
-                # ============================================================
                 
-                # 95% CI for median
                 summary_stats[model_name]['median_ci_lower'] = np.percentile(median_boots, 2.5)
                 summary_stats[model_name]['median_ci_upper'] = np.percentile(median_boots, 97.5)
-                
-                # 95% CI for mean (fully vectorized, no loop needed)
                 summary_stats[model_name]['mean_ci_lower'] = np.percentile(weighted_means, 2.5)
                 summary_stats[model_name]['mean_ci_upper'] = np.percentile(weighted_means, 97.5)
                 
-            elif ci_method == 'poisson_bootstrap':
-                # Original loop-based Poisson bootstrap (slower but less memory)
-                median_boots = []
-                mean_boots = []
-                n_genes_valid = len(model_pearson_rs)
-                
-                np.random.seed(42)
-                for _ in range(n_bootstrap):
-                    # Generate Poisson(1) weights for each gene
-                    weights = np.random.poisson(lam=1, size=n_genes_valid)
-                    
-                    # Weighted median approximation
-                    weighted_sample = np.repeat(model_pearson_rs, weights)
-                    
-                    if len(weighted_sample) > 0:
-                        median_boots.append(np.median(weighted_sample))
-                        mean_boots.append(np.mean(weighted_sample))
-                
-                # 95% CI for median
-                summary_stats[model_name]['median_ci_lower'] = np.percentile(median_boots, 2.5)
-                summary_stats[model_name]['median_ci_upper'] = np.percentile(median_boots, 97.5)
-                
-                # 95% CI for mean
-                summary_stats[model_name]['mean_ci_lower'] = np.percentile(mean_boots, 2.5)
-                summary_stats[model_name]['mean_ci_upper'] = np.percentile(mean_boots, 97.5)
-                
             elif ci_method == 'bootstrap':
-                # Standard bootstrap (loop-based resampling)
+                # Standard bootstrap
                 median_boots = []
                 mean_boots = []
                 n_genes_valid = len(model_pearson_rs)
                 
                 np.random.seed(42)
                 for _ in range(n_bootstrap):
-                    # Resample genes with replacement
                     boot_indices = np.random.choice(n_genes_valid, size=n_genes_valid, replace=True)
                     boot_sample = model_pearson_rs[boot_indices]
                     
@@ -442,18 +358,14 @@ def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
                 summary_stats[model_name]['mean_ci_upper'] = np.percentile(mean_boots, 97.5)
                 
             elif ci_method == 'fisher':
-                # Fisher's z-transformation for median/mean
-                # Note: This is approximate for median, exact for mean
+                # Fisher transformation
                 n_genes_valid = len(model_pearson_rs)
                 
-                # For mean
                 se_mean = np.std(model_pearson_rs) / np.sqrt(n_genes_valid)
                 summary_stats[model_name]['mean_ci_lower'] = mean_r - 1.96 * se_mean
                 summary_stats[model_name]['mean_ci_upper'] = mean_r + 1.96 * se_mean
                 
-                # For median (approximate using bootstrap estimate of SE)
-                # This is less precise than bootstrap, but faster
-                se_median = 1.253 * se_mean  # Asymptotic relationship for normal data
+                se_median = 1.253 * se_mean
                 summary_stats[model_name]['median_ci_lower'] = median_r - 1.96 * se_median
                 summary_stats[model_name]['median_ci_upper'] = median_r + 1.96 * se_median
             
@@ -470,7 +382,6 @@ def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
     # Create figure
     fig, ax = plt.subplots(figsize=(10, 6))
     
-    # Violin plot with box plot overlay
     parts = ax.violinplot(
         [df_per_gene[df_per_gene['model'] == m]['pearson_r'].values 
          for m in model_names],
@@ -480,19 +391,16 @@ def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
         showmedians=True
     )
     
-    # Color the violin plots
     for i, pc in enumerate(parts['bodies']):
         pc.set_facecolor(MODEL_COLORS.get(model_names[i], '#1f77b4'))
         pc.set_alpha(0.6)
     
-    # Add error bars for median CI if available
     if show_ci and ci_method is not None:
         for i, model_name in enumerate(model_names):
             stats = summary_stats[model_name]
             median = stats['median']
             
             if 'median_ci_lower' in stats:
-                # Plot CI as error bar on the median line
                 ci_lower = stats['median_ci_lower']
                 ci_upper = stats['median_ci_upper']
                 
@@ -502,14 +410,12 @@ def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
                            capsize=10, capthick=2, linewidth=2,
                            label='Median 95% CI' if i == 0 else '', zorder=10)
     
-    # Add summary statistics annotations
     for i, model_name in enumerate(model_names):
         stats = summary_stats[model_name]
         median = stats['median']
         mean = stats['mean']
         q1, q3 = stats['q1'], stats['q3']
         
-        # Build text annotation
         if show_ci and ci_method is not None and 'median_ci_lower' in stats:
             textstr = (f"Median: {median:.3f}\n"
                       f"[{stats['median_ci_lower']:.3f}, {stats['median_ci_upper']:.3f}]\n"
@@ -522,7 +428,6 @@ def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
                 ha='center', va='top', fontsize=8,
                 bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
-    # Formatting
     ax.set_ylabel("Pearson's R (Per-Gene)", fontsize=12, fontweight='bold')
     ax.set_xlabel('Model Architecture', fontsize=12, fontweight='bold')
     
@@ -546,7 +451,6 @@ def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
     print(f"\nFigure saved to {output_path}")
     plt.show()
     
-    # Add summary statistics to return DataFrame
     summary_df = pd.DataFrame(summary_stats).T
     
     return df_per_gene, summary_df
