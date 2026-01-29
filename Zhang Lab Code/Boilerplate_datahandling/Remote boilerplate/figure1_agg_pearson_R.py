@@ -33,6 +33,74 @@ def set_publication_style():
         'ytick.major.size': 5,
     })
 
+
+def weighted_quantile_vectorized(values, weights, quantile=0.5):
+    """
+    Vectorized weighted quantile computation for bootstrap samples.
+    
+    This is the KEY optimization - replaces the slow np.repeat() + np.median() loop
+    with a fully vectorized approach that processes all bootstrap iterations at once.
+    
+    Parameters
+    ----------
+    values : array, shape (n_samples,)
+        The values to compute quantiles over (e.g., per-gene Pearson's R)
+    weights : array, shape (n_bootstrap, n_samples)
+        Poisson weights for each bootstrap iteration
+    quantile : float, default=0.5
+        Quantile to compute (0.5 = median)
+    
+    Returns
+    -------
+    quantiles : array, shape (n_bootstrap,)
+        Weighted quantile for each bootstrap iteration
+        
+    Notes
+    -----
+    Algorithm:
+    1. Sort values once (O(n log n))
+    2. Reorder weights to match sorted values
+    3. Compute cumulative weights for each bootstrap (vectorized)
+    4. Find threshold crossing indices (vectorized)
+    5. Extract quantiles (vectorized)
+    
+    Time complexity: O(n log n + b*n) where b = n_bootstrap, n = n_samples
+    Much faster than the old O(b*n*log(n)) approach with np.repeat()
+    """
+    n_bootstrap = weights.shape[0]
+    n_samples = len(values)
+    
+    # Sort values once (shared across all bootstrap iterations)
+    sorted_idx = np.argsort(values)
+    sorted_values = values[sorted_idx]
+    
+    # Reorder weights to match sorted values
+    # Shape: (n_bootstrap, n_samples)
+    sorted_weights = weights[:, sorted_idx]
+    
+    # Cumulative weights for each bootstrap iteration (vectorized!)
+    # Shape: (n_bootstrap, n_samples)
+    cumsum_weights = np.cumsum(sorted_weights, axis=1)
+    
+    # Total weight for each bootstrap iteration
+    # Shape: (n_bootstrap, 1)
+    total_weights = cumsum_weights[:, -1:]
+    
+    # Find quantile positions (e.g., 50th percentile = 0.5 * total_weight)
+    # Shape: (n_bootstrap, 1)
+    quantile_positions = quantile * total_weights
+    
+    # Find indices where cumsum crosses quantile threshold (vectorized!)
+    # For each bootstrap iteration, find first index where cumsum >= threshold
+    # argmax returns the first True index
+    # Shape: (n_bootstrap,)
+    indices = np.argmax(cumsum_weights >= quantile_positions, axis=1)
+    
+    # Extract quantiles using advanced indexing
+    # Shape: (n_bootstrap,)
+    return sorted_values[indices]
+
+
 def figure_pearson_r_comparison_fast(y_true, predictions_dict, 
                                      ci_method='poisson_bootstrap_vectorized',
                                      n_bootstrap=5000,
@@ -186,7 +254,6 @@ def figure_pearson_r_comparison_fast(y_true, predictions_dict,
     return metrics_summary
 
 
-# Alternative version: Per-gene Pearson's R distribution with VECTORIZED bootstrap CI
 def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
                                            ci_method='poisson_bootstrap_vectorized',
                                            n_bootstrap=1000,
@@ -283,29 +350,42 @@ def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
             print(f"Computing {ci_method} CI for {model_name} summary statistics...")
             
             if ci_method == 'poisson_bootstrap_vectorized':
-                # VECTORIZED Poisson bootstrap - MUCH FASTER
+                # ===================================================================
+                # OPTIMIZED VECTORIZED POISSON BOOTSTRAP
+                # This is the KEY FIX - replaces the slow loop with vectorized ops
+                # ===================================================================
                 n_genes_valid = len(model_pearson_rs)
                 
                 np.random.seed(42)
                 
                 # Generate ALL Poisson weights at once: shape (n_bootstrap, n_genes)
+                # Memory: For 16k genes, 1k bootstrap -> ~128 MB (totally fine!)
                 weights = np.random.poisson(lam=1, size=(n_bootstrap, n_genes_valid))
                 
-                # Vectorized computation of weighted statistics
-                # For mean: straightforward weighted average
+                print(f"  Weight matrix: {weights.shape} (~{weights.nbytes/1e6:.1f} MB)")
+                
+                # ============================================================
+                # MEAN: Fully vectorized (no loop needed)
+                # ============================================================
                 w_sum = weights.sum(axis=1, keepdims=True)  # (n_bootstrap, 1)
                 weighted_means = (weights * model_pearson_rs).sum(axis=1) / w_sum.ravel()
                 
-                # For median: use weighted sampling approximation
-                # Create expanded samples based on weights
-                median_boots = []
-                for boot_idx in range(n_bootstrap):
-                    # Create weighted sample by repeating each gene's R value by its weight
-                    weighted_sample = np.repeat(model_pearson_rs, weights[boot_idx])
-                    if len(weighted_sample) > 0:
-                        median_boots.append(np.median(weighted_sample))
-                
-                median_boots = np.array(median_boots)
+                # ============================================================
+                # MEDIAN: Now also vectorized using weighted_quantile_vectorized!
+                # ============================================================
+                # OLD CODE (SLOW):
+                # median_boots = []
+                # for boot_idx in range(n_bootstrap):
+                #     weighted_sample = np.repeat(model_pearson_rs, weights[boot_idx])
+                #     median_boots.append(np.median(weighted_sample))
+                #
+                # NEW CODE (FAST):
+                median_boots = weighted_quantile_vectorized(
+                    values=model_pearson_rs,
+                    weights=weights,
+                    quantile=0.5
+                )
+                # ============================================================
                 
                 # 95% CI for median
                 summary_stats[model_name]['median_ci_lower'] = np.percentile(median_boots, 2.5)
