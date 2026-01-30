@@ -39,9 +39,6 @@ def figure_pearson_r_comparison_fast(y_true, predictions_dict,
     """
     Ultra-fast Pearson's R comparison with confidence intervals.
     
-    For massive datasets (>10M observations), uses analytical Fisher Z-transformation
-    by default, which is near-instantaneous and statistically valid.
-    
     Parameters
     ----------
     y_true : array-like
@@ -84,32 +81,18 @@ def figure_pearson_r_comparison_fast(y_true, predictions_dict,
         print(f"Pearson's R: {pearson_r:.6f}")
         
         if ci_method == 'analytical':
-            # ================================================================
-            # ANALYTICAL CONFIDENCE INTERVAL (INSTANT!)
-            # Fisher Z-transformation - standard statistical approach
-            # ================================================================
-            print(f"Computing analytical CI using Fisher Z-transformation...")
-            
             # Fisher Z-transformation
+            print(f"Computing analytical CI using Fisher Z-transformation...")
             z = np.arctanh(pearson_r)
-            
-            # Standard error of Z
             se_z = 1 / np.sqrt(n_samples - 3)
-            
-            # 95% CI in Z-space
             z_lower = z - 1.96 * se_z
             z_upper = z + 1.96 * se_z
-            
-            # Transform back to correlation space
             ci_lower = np.tanh(z_lower)
             ci_upper = np.tanh(z_upper)
-            
             print(f"  CI computed in <0.001s using {n_samples:,} observations")
             
         elif ci_method == 'bootstrap_subsample':
-            # ================================================================
-            # BOOTSTRAP ON SUBSAMPLE (if you really want bootstrap)
-            # ================================================================
+            # Bootstrap on subsample
             if subsample_size is None:
                 subsample_size = min(100000, n_samples)
             
@@ -117,18 +100,13 @@ def figure_pearson_r_comparison_fast(y_true, predictions_dict,
             print(f"  {n_bootstrap:,} iterations")
             
             np.random.seed(42)
-            
-            # Take a stratified subsample
             subsample_idx = np.random.choice(n_samples, size=subsample_size, replace=False)
             y_true_sub = y_true_flat[subsample_idx]
             y_pred_sub = y_pred_flat[subsample_idx]
             
             bootstrap_rs = []
-            
             for i in range(n_bootstrap):
-                # Bootstrap resample
                 boot_idx = np.random.choice(subsample_size, size=subsample_size, replace=True)
-                
                 r_boot, _ = pearsonr(y_true_sub[boot_idx], y_pred_sub[boot_idx])
                 bootstrap_rs.append(r_boot)
                 
@@ -164,38 +142,42 @@ def figure_pearson_r_comparison_fast(y_true, predictions_dict,
         [ci_uppers[i] - pearson_rs[i] for i in range(len(model_names))]
     ])
     
+    # MATCHED: Same error bar styling as scatterplot
     ax.errorbar(x_pos, pearson_rs, yerr=errors, 
                 fmt='none', ecolor='black', capsize=8, capthick=1.5, 
                 linewidth=1.5, zorder=10)
     
-    for i, (r, ci_lower, ci_upper) in enumerate(zip(pearson_rs, ci_lowers, ci_uppers)):
-        ax.text(i, r + (ci_upper - r) + 0.01, f'{r:.4f}', 
-                ha='center', va='bottom', fontsize=10, fontweight='bold')
+    # CHANGED: Add stats text boxes with WHEAT background (matching scatterplot)
+    for i, (model_name, r, ci_lower, ci_upper, p_val) in enumerate(zip(
+            model_names, pearson_rs, ci_lowers, ci_uppers, p_values)):
+        
+        # Build stats text with same format as scatterplot
+        p_text = "p < 0.001" if p_val < 0.001 else f"p = {p_val:.3f}"
+        ci_width = ci_upper - ci_lower
+        
+        stats_text = (f"Pearson's R = {r:.4f}\n"
+                      f"95% CI = [{ci_lower:.4f}, {ci_upper:.4f}]\n"
+                      f"CI width = {ci_width:.4f}\n"
+                      f"{p_text}")
+        
+        # MATCHED: Same text box position and style as scatterplot
+        ax.text(i, 0.5 * ax.get_ylim()[1], stats_text,
+                ha='center', va='top', fontsize=9,
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
     
     ax.set_ylabel("Pearson's R (Aggregate)", fontsize=12, fontweight='bold')
     ax.set_xlabel('Model Architecture', fontsize=12, fontweight='bold')
-    
-    if ci_method == 'analytical':
-        title = "Model Performance Comparison: Aggregate Pearson's R with 95% CI\n(Fisher Z-transformation)"
-    else:
-        title = f"Model Performance Comparison: Aggregate Pearson's R with 95% CI\n(Bootstrap on {subsample_size:,} subsample)"
-    
-    ax.set_title(title, fontsize=13, fontweight='bold', pad=20)
-    
+        
     ax.set_xticks(x_pos)
     ax.set_xticklabels(model_names, fontsize=11, fontweight='bold')
     
-    y_max = max(ci_uppers) + 0.05
+    y_max = max(ci_uppers) + 0.15  # Extra space for text boxes
     ax.set_ylim(0, min(1.0, y_max))
+    
+    # MATCHED: Same grid alpha as scatterplot
     ax.grid(True, alpha=0.3, axis='y')
     ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.5)
-    
-    if ci_method == 'analytical':
-        method_text = f"95% CI via Fisher Z-transformation (n={n_samples:,})"
-    else:
-        method_text = f"95% CI via bootstrap ({n_bootstrap:,} iterations on {subsample_size:,} subsample)"
-    fig.text(0.5, 0.02, method_text, ha='center', fontsize=9, style='italic')
-    
+       
     plt.tight_layout()
     plt.savefig(output_path, dpi=DPI, bbox_inches='tight')
     print(f"\nFigure saved to {output_path}")
@@ -215,9 +197,7 @@ def figure_pearson_r_comparison_fast(y_true, predictions_dict,
 
 
 def weighted_quantile_vectorized(values, weights, quantile=0.5):
-    """
-    Vectorized weighted quantile computation for bootstrap samples.
-    """
+    """Vectorized weighted quantile computation for bootstrap samples."""
     n_bootstrap = weights.shape[0]
     
     sorted_idx = np.argsort(values)
@@ -240,6 +220,7 @@ def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
                                            output_path='/home/christianl/Zhang-Lab/Zhang Lab Data/Saved figures/Production_model_figures(x_train)/per_gene_pearson_r_distribution.png'):
     """
     Generate violin/box plot showing distribution of per-gene Pearson's R values.
+    
     
     Parameters
     ----------
@@ -314,7 +295,7 @@ def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
                 summary_stats[model_name]['median_ci_upper'] = median_r + 1.96 * se_median
                 
             elif ci_method == 'poisson_bootstrap_vectorized':
-                # OPTIMIZED vectorized Poisson bootstrap
+                # Vectorized Poisson bootstrap
                 n_genes_valid = len(model_pearson_rs)
                 
                 np.random.seed(42)
@@ -410,41 +391,41 @@ def figure_per_gene_pearson_r_distribution(y_true_df, predictions_dict,
                            capsize=10, capthick=2, linewidth=2,
                            label='Median 95% CI' if i == 0 else '', zorder=10)
     
+    # CHANGED: Stats text boxes with WHEAT background (matching scatterplot)
     for i, model_name in enumerate(model_names):
         stats = summary_stats[model_name]
         median = stats['median']
         mean = stats['mean']
         q1, q3 = stats['q1'], stats['q3']
         
+        # Build consistent stats text
         if show_ci and ci_method is not None and 'median_ci_lower' in stats:
-            textstr = (f"Median: {median:.3f}\n"
-                      f"[{stats['median_ci_lower']:.3f}, {stats['median_ci_upper']:.3f}]\n"
-                      f"Mean: {mean:.3f}\n"
-                      f"IQR: [{q1:.3f}, {q3:.3f}]")
+            textstr = (f"Median = {median:.3f}\n"
+                      f"95% CI = [{stats['median_ci_lower']:.3f}, {stats['median_ci_upper']:.3f}]\n"
+                      f"Mean = {mean:.3f}\n"
+                      f"IQR = [{q1:.3f}, {q3:.3f}]")
         else:
-            textstr = f'Median: {median:.3f}\nMean: {mean:.3f}\nIQR: [{q1:.3f}, {q3:.3f}]'
+            textstr = f'Median = {median:.3f}\nMean = {mean:.3f}\nIQR = [{q1:.3f}, {q3:.3f}]'
         
-        ax.text(i, ax.get_ylim()[1] * 0.95, textstr,
-                ha='center', va='top', fontsize=8,
-                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        # MATCHED: Same position (top-left style) and wheat background
+        ax.text(i, ax.get_ylim()[1] * 0.5, textstr,
+                ha='center', va='top', fontsize=9,
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
     
     ax.set_ylabel("Pearson's R (Per-Gene)", fontsize=12, fontweight='bold')
     ax.set_xlabel('Model Architecture', fontsize=12, fontweight='bold')
-    
-    title = f"Distribution of Per-Gene Pearson's R ({len(df_per_gene[df_per_gene['model'] == model_names[0]]):,} genes)"
-    if show_ci and ci_method is not None:
-        ci_label = ci_method.replace('_', ' ').title()
-        title += f"\n95% CI via {ci_label}"
-    ax.set_title(title, fontsize=13, fontweight='bold', pad=20)
-    
+        
     ax.set_xticks(np.arange(len(model_names)))
     ax.set_xticklabels(model_names, fontsize=11, fontweight='bold')
     
+    # MATCHED: Same grid alpha as scatterplot
     ax.grid(True, alpha=0.3, axis='y')
     ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.5)
     
+    # MATCHED: Legend in lower right (if showing CI)
     if show_ci and ci_method is not None:
         ax.legend(loc='lower right', fontsize=9)
+    
     
     plt.tight_layout()
     plt.savefig(output_path, dpi=DPI, bbox_inches='tight')
