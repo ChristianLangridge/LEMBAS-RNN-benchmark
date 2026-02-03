@@ -49,6 +49,9 @@ print("Loading pre-computed predictions...")
 data_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved predictions/model_predictions_uncentered_v1.npz'
 data = np.load(data_path, allow_pickle=True)
 
+data_path_external = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved predictions/model_predictions_uncentered_v1.npz'
+data_external = np.load(data_path_external, allow_pickle=True)
+
 # Reconstruct training data
 y_train = pd.DataFrame(
     data['y_train'],
@@ -73,9 +76,24 @@ predictions_test = {
     "RNN": data['rnn_y_pred_test']
 }
 
+y_validation = pd.DataFrame(
+    data_external['y_validation'],
+    columns=data_external['y_validation_columns']
+)
+
+predictions_validation = {
+    "MLR": data_external['mlr_y_pred_val'],
+    "XGBRFRegressor": data_external['xgbrf_y_pred_val'],
+    "RNN": data_external['rnn_y_pred_val']
+}
+
+
+
+
 print(f"✓ Loaded predictions for {len(predictions_train)} models")
 print(f"  Training samples: {y_train.shape[0]}, Genes: {y_train.shape[1]}")
 print(f"  Test samples: {y_test.shape[0]}, Genes: {y_test.shape[1]}")
+print(f"  Val samples: {y_validation.shape[0]}, Genes: {y_validation.shape[1]}")
 
 # ============================================================================
 # Metrics functions
