@@ -1,0 +1,62 @@
+import numpy as np
+import pandas as pd
+import torch
+import joblib
+from sklearn.model_selection import train_test_split
+import sys
+import os
+
+sys.path.append('/home/christianl/Zhang-Lab/Zhang Lab Code/Tuning/uncentered_RNN_tuning')
+from RNN_reconstructor import load_model_from_checkpoint
+
+# Load reference training/testing data
+gene_expression = pd.read_csv('~/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv', 
+                              sep='\t', header=0, index_col=0)
+tf_expression = pd.read_csv('~/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv', 
+                            sep='\t', header=0, index_col=0)
+
+# Filter TFs
+net = pd.read_csv('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/network(full).tsv', sep='\t')
+network_tfs = set(net['TF'].unique())
+network_genes = set(net['Gene'].unique())
+network_nodes = network_tfs | network_genes
+usable_features = [tf for tf in tf_expression.columns if tf in network_nodes]
+
+x = tf_expression[usable_features]
+y = gene_expression
+
+# Load validation data 
+validation_dataset = pd.read_csv('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/Liver_bulk_external.tsv', 
+                            sep='\t', header=0, index_col=0)
+
+
+
+# Generating x_val + y_val using Kejun's script 
+
+" Kejun's gene match up script - Add genes in external validation gene expression data to make its dimension matches train data"
+
+# Load input data
+new_input = validation_dataset
+
+# Read the expected features from the first line of the reference file
+with open("~/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv", "r", encoding="utf-8") as file:
+    header_line = file.readline().strip()  # Read the first line and strip whitespace
+
+# Split the header line into feature names
+expected_features = header_line.split("\t")
+
+# Identify missing features in the input data
+missing_features = [feature for feature in expected_features if feature not in new_input.columns]
+
+# Fill missing features with zeros
+for feature in missing_features:
+    new_input[feature] = 0
+
+# Reorder columns to match the expected feature order
+new_input = new_input[expected_features]
+
+# Save the updated dataframe to a new file
+output_file = "Liver_bulk_external(y_validation).tsv"
+new_input.to_csv(output_file, sep="\t")
+
+
