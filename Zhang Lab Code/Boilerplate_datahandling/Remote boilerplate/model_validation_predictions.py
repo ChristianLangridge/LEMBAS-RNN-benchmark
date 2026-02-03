@@ -70,12 +70,12 @@ print("\n[3/6] Generating y_validation (Gene expression features)...")
 # Load input data
 new_input = validation_dataset
 
-# Read the expected features from the first line of the reference file
-with open("/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv", "r", encoding="utf-8") as file:
-    header_line = file.readline().strip()  # Read the first line and strip whitespace
+# Load the reference gene expression file
+gene_expression_ref = pd.read_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv", 
+                                  sep="\t", header=0, index_col=0)
 
-# Split the header line into feature names
-expected_features = header_line.split("\t")
+# Get expected features from columns
+expected_features = gene_expression_ref.columns.tolist()
 
 # Identify missing features in the input data
 missing_features_y = [feature for feature in expected_features if feature not in new_input.columns]

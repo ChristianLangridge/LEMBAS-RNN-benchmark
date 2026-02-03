@@ -49,7 +49,7 @@ print("Loading pre-computed predictions...")
 data_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved predictions/model_predictions_uncentered_v1.npz'
 data = np.load(data_path, allow_pickle=True)
 
-data_path_external = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved predictions/model_predictions_uncentered_v1.npz'
+data_path_external = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved predictions/model_predictions_validation_v1.npz'
 data_external = np.load(data_path_external, allow_pickle=True)
 
 # Reconstruct training data
