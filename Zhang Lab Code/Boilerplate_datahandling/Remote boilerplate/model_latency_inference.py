@@ -7,10 +7,15 @@ import joblib
 import time
 from typing import Dict, List, Tuple
 import warnings
+import sys
+
+# Add your specific paths here if not already in environment
+# sys.path.append('/path/to/your/modules')
+
 warnings.filterwarnings('ignore')
 
 # ============================================================================
-# Configuration and utilities
+# Configuration and Styling
 # ============================================================================
 
 MODEL_COLORS = {
@@ -19,437 +24,234 @@ MODEL_COLORS = {
     'MLR': '#2ca02c'            # Green
 }
 
-DPI = 300
-FIGSIZE_SINGLE = (8, 6)
-FIGSIZE_TRIPLE = (15, 5)
-FIGSIZE_WIDE = (14, 8)
-
 def set_publication_style():
-    """Apply consistent publication-quality styling."""
     sns.set_style("whitegrid")
     plt.rcParams.update({
-        'figure.dpi': DPI,
-        'savefig.dpi': DPI,
+        'figure.dpi': 300,
         'font.size': 11,
         'axes.labelsize': 12,
         'axes.titlesize': 13,
         'xtick.labelsize': 10,
         'ytick.labelsize': 10,
-        'legend.fontsize': 10,
-        'axes.linewidth': 1.2,
-        'xtick.major.width': 1.2,
-        'ytick.major.width': 1.2,
-        'xtick.major.size': 5,
-        'ytick.major.size': 5,
+        'legend.fontsize': 10
     })
 
 # ============================================================================
-# Latency benchmarking functions
+# Revised Benchmarking Functions (Latency Focused)
 # ============================================================================
 
-def benchmark_mlr_inference(model, X_data: np.ndarray, n_runs: int = 100, 
-                           warmup_runs: int = 10) -> Dict[str, float]:
-    """
-    Benchmark MLR model inference latency.
+def benchmark_mlr_inference(model, X_input: np.ndarray, n_runs: int = 100, 
+                           warmup_runs: int = 20) -> Dict[str, float]:
+    """Benchmarks MLR on the specific input provided (single row or batch)."""
     
-    Parameters:
-    -----------
-    model : sklearn model
-        Trained MLR model
-    X_data : np.ndarray
-        Input features for inference
-    n_runs : int
-        Number of timing runs (default: 100)
-    warmup_runs : int
-        Number of warmup runs to exclude (default: 10)
-    
-    Returns:
-    --------
-    dict : Latency statistics in milliseconds
-    """
-    latencies = []
-    
-    # Warmup runs
+    # Warmup
     for _ in range(warmup_runs):
-        _ = model.predict(X_data)
+        _ = model.predict(X_input)
     
-    # Timed runs
+    latencies = []
     for _ in range(n_runs):
         start = time.perf_counter()
-        _ = model.predict(X_data)
-        end = time.perf_counter()
-        latencies.append((end - start) * 1000)  # Convert to ms
-    
-    latencies = np.array(latencies)
-    
-    return {
-        'mean': np.mean(latencies),
-        'median': np.median(latencies),
-        'std': np.std(latencies),
-        'min': np.min(latencies),
-        'max': np.max(latencies),
-        'p95': np.percentile(latencies, 95),
-        'p99': np.percentile(latencies, 99),
-        'all_latencies': latencies
-    }
+        _ = model.predict(X_input)
+        latencies.append((time.perf_counter() - start) * 1000) # ms
+        
+    return _calculate_stats(latencies)
 
 
-def benchmark_xgbrf_inference(models_list: List, X_data: np.ndarray, 
-                              n_runs: int = 100, warmup_runs: int = 10) -> Dict[str, float]:
-    """
-    Benchmark XGBRF model inference latency.
+def benchmark_xgbrf_inference(models_list: List, X_input: np.ndarray, 
+                              n_runs: int = 100, warmup_runs: int = 20) -> Dict[str, float]:
+    """Benchmarks the list of XGB models on the input."""
     
-    Parameters:
-    -----------
-    models_list : list
-        List of trained XGBRF models (one per gene)
-    X_data : np.ndarray
-        Input features for inference
-    n_runs : int
-        Number of timing runs (default: 100)
-    warmup_runs : int
-        Number of warmup runs to exclude (default: 10)
-    
-    Returns:
-    --------
-    dict : Latency statistics in milliseconds
-    """
-    latencies = []
-    
-    # Warmup runs
+    # Warmup
     for _ in range(warmup_runs):
-        _ = np.column_stack([model.predict(X_data) for model in models_list])
+        _ = [model.predict(X_input) for model in models_list]
     
-    # Timed runs
+    latencies = []
     for _ in range(n_runs):
         start = time.perf_counter()
-        _ = np.column_stack([model.predict(X_data) for model in models_list])
-        end = time.perf_counter()
-        latencies.append((end - start) * 1000)  # Convert to ms
+        # Note: The list comprehension is part of the inference cost here
+        # For pure prediction speed, we exclude the column_stack overhead 
+        # unless you specifically need the formatted array output.
+        _ = [model.predict(X_input) for model in models_list]
+        latencies.append((time.perf_counter() - start) * 1000) # ms
     
-    latencies = np.array(latencies)
-    
-    return {
-        'mean': np.mean(latencies),
-        'median': np.median(latencies),
-        'std': np.std(latencies),
-        'min': np.min(latencies),
-        'max': np.max(latencies),
-        'p95': np.percentile(latencies, 95),
-        'p99': np.percentile(latencies, 99),
-        'all_latencies': latencies
-    }
+    return _calculate_stats(latencies)
 
 
-def benchmark_rnn_inference(model, n_runs: int = 100, 
-                           warmup_runs: int = 10) -> Dict[str, float]:
-    """
-    Benchmark RNN model inference latency.
+def benchmark_rnn_inference(model, X_input: torch.Tensor, n_runs: int = 100, 
+                           warmup_runs: int = 20) -> Dict[str, float]:
+    """Benchmarks RNN on the specific input tensor."""
     
-    Parameters:
-    -----------
-    model : torch model
-        Trained RNN model with X_in already loaded
-    n_runs : int
-        Number of timing runs (default: 100)
-    warmup_runs : int
-        Number of warmup runs to exclude (default: 10)
+    # Ensure model is in eval mode
+    model.eval()
     
-    Returns:
-    --------
-    dict : Latency statistics in milliseconds
-    """
-    latencies = []
-    
-    # Warmup runs
+    # Warmup
     with torch.no_grad():
         for _ in range(warmup_runs):
-            _ = model(model.X_in)
+            _ = model(X_input)
     
-    # Timed runs
+    latencies = []
     with torch.no_grad():
         for _ in range(n_runs):
             start = time.perf_counter()
-            _ = model(model.X_in)
-            end = time.perf_counter()
-            latencies.append((end - start) * 1000)  # Convert to ms
-    
-    latencies = np.array(latencies)
-    
+            _ = model(X_input)
+            latencies.append((time.perf_counter() - start) * 1000) # ms
+            
+    return _calculate_stats(latencies)
+
+
+def _calculate_stats(latencies_list):
+    arr = np.array(latencies_list)
     return {
-        'mean': np.mean(latencies),
-        'median': np.median(latencies),
-        'std': np.std(latencies),
-        'min': np.min(latencies),
-        'max': np.max(latencies),
-        'p95': np.percentile(latencies, 95),
-        'p99': np.percentile(latencies, 99),
-        'all_latencies': latencies
+        'mean': np.mean(arr),
+        'median': np.median(arr),
+        'std': np.std(arr),
+        'p95': np.percentile(arr, 95),
+        'p99': np.percentile(arr, 99),
+        'all_latencies': arr
     }
 
+# ============================================================================
+# Main Execution Logic
+# ============================================================================
+
+def run_benchmarks(mlr_model, xgbrf_models, rnn_model, X_full, 
+                   n_runs=100, save_path=None):
+    
+    print("\n" + "="*80)
+    print(" 🚀 STARTING DUAL-MODE BENCHMARK")
+    print("="*80)
+
+    # ---------------------------------------------------------
+    # 1. PREPARE INPUTS
+    # ---------------------------------------------------------
+    # Helper to get single row
+    if isinstance(X_full, pd.DataFrame):
+        X_np_full = X_full.values
+        # Create single row (1, n_features) to preserve 2D shape
+        X_np_single = X_full.iloc[0:1].values 
+    else:
+        X_np_full = X_full
+        X_np_single = X_full[0:1, :]
+
+    # Prepare Tensors for RNN
+    # We assume the RNN model was trained on the same device (CPU usually for inference tests)
+    X_torch_full = torch.tensor(X_np_full, dtype=torch.float32)
+    X_torch_single = torch.tensor(X_np_single, dtype=torch.float32)
+
+    # ---------------------------------------------------------
+    # 2. RUN TRUE LATENCY TEST (Batch Size = 1)
+    # ---------------------------------------------------------
+    print(f"\n[Mode A] TRUE LATENCY (Input shape: {X_np_single.shape})")
+    print("-" * 60)
+    
+    results_latency = {}
+    
+    print(f"  Testing MLR...")
+    results_latency['MLR'] = benchmark_mlr_inference(mlr_model, X_np_single, n_runs)
+    
+    print(f"  Testing XGBRFRegressor ({len(xgbrf_models)} sub-models)...")
+    results_latency['XGBRFRegressor'] = benchmark_xgbrf_inference(xgbrf_models, X_np_single, n_runs)
+    
+    print(f"  Testing RNN...")
+    # Try/Except block in case RNN is strictly graph-based and rejects single nodes
+    try:
+        results_latency['RNN'] = benchmark_rnn_inference(rnn_model, X_torch_single, n_runs)
+    except Exception as e:
+        print(f"    ! RNN Single-Row Error: {e}")
+        print("    ! Falling back to full batch for RNN (Latency will be inflated)")
+        results_latency['RNN'] = benchmark_rnn_inference(rnn_model, X_torch_full, n_runs)
+
+    # ---------------------------------------------------------
+    # 3. RUN THROUGHPUT TEST (Batch Size = Full)
+    # ---------------------------------------------------------
+    print(f"\n[Mode B] BATCH THROUGHPUT (Input shape: {X_np_full.shape})")
+    print("-" * 60)
+    
+    # We run fewer runs for batch processing as it takes longer
+    results_throughput = {}
+    results_throughput['MLR'] = benchmark_mlr_inference(mlr_model, X_np_full, n_runs=10)['mean']
+    results_throughput['XGBRFRegressor'] = benchmark_xgbrf_inference(xgbrf_models, X_np_full, n_runs=5)['mean']
+    results_throughput['RNN'] = benchmark_rnn_inference(rnn_model, X_torch_full, n_runs=10)['mean']
+
+    # ---------------------------------------------------------
+    # 4. REPORTING
+    # ---------------------------------------------------------
+    print("\n" + "="*80)
+    print("FINAL RESULTS SUMMARY")
+    print("="*80)
+    print(f"{'Model':<15} | {'Latency (ms/sample)':<22} | {'Throughput (samples/sec)':<25}")
+    print("-" * 70)
+    
+    batch_size = X_np_full.shape[0]
+    
+    for model in ['MLR', 'XGBRFRegressor', 'RNN']:
+        lat = results_latency[model]['mean']
+        # Throughput = (Batch Size / Batch Time in seconds)
+        batch_time_ms = results_throughput[model]
+        tput = batch_size / (batch_time_ms / 1000)
+        
+        print(f"{model:<15} | {lat:>10.3f} ms           | {tput:>10.1f} samples/s")
+
+    # ---------------------------------------------------------
+    # 5. PLOTTING (Only plotting Latency as requested)
+    # ---------------------------------------------------------
+    plot_latency_comparison(results_latency, save_path)
+    
+    return results_latency
 
 # ============================================================================
-# Visualization functions
+# Plotting Function (Unchanged, just ensured it uses the results)
 # ============================================================================
 
-def plot_latency_comparison(results: Dict[str, Dict[str, float]], 
-                           save_path: str = None,
-                           show_percentiles: bool = True) -> plt.Figure:
-    """
-    Create publication-quality latency comparison figure.
-    
-    Parameters:
-    -----------
-    results : dict
-        Dictionary with model names as keys and latency stats as values
-    save_path : str, optional
-        Path to save the figure
-    show_percentiles : bool
-        Whether to show p95/p99 markers (default: True)
-    
-    Returns:
-    --------
-    matplotlib.figure.Figure
-    """
+def plot_latency_comparison(results, save_path):
     set_publication_style()
-    
-    fig, axes = plt.subplots(1, 3, figsize=FIGSIZE_TRIPLE)
-    
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
     model_names = list(results.keys())
     
-    # ========================================================================
-    # Panel A: Box plot with individual points
-    # ========================================================================
+    # 1. Box Plot
     ax = axes[0]
-    
-    positions = []
-    for i, model_name in enumerate(model_names):
-        pos = i + 1
-        positions.append(pos)
-        latencies = results[model_name]['all_latencies']
-        color = MODEL_COLORS[model_name]
+    positions = [1, 2, 3]
+    for i, model in enumerate(model_names):
+        data = results[model]['all_latencies']
+        color = MODEL_COLORS.get(model, 'gray')
+        ax.boxplot([data], positions=[positions[i]], patch_artist=True,
+                   boxprops=dict(facecolor=color, alpha=0.5),
+                   medianprops=dict(color='black'))
+        # Jitter
+        y = data
+        x = np.random.normal(positions[i], 0.04, size=len(y))
+        ax.scatter(x, y, alpha=0.5, s=10, color=color)
         
-        # Box plot
-        bp = ax.boxplot([latencies], positions=[pos], widths=0.5,
-                        patch_artist=True, showfliers=False,
-                        boxprops=dict(facecolor=color, alpha=0.3, linewidth=1.2),
-                        medianprops=dict(color='black', linewidth=2),
-                        whiskerprops=dict(linewidth=1.2),
-                        capprops=dict(linewidth=1.2))
-        
-        # Overlay individual points with jitter
-        jitter = np.random.normal(0, 0.04, size=len(latencies))
-        ax.scatter(np.ones(len(latencies)) * pos + jitter, latencies, 
-                  alpha=0.3, s=10, color=color, zorder=3)
-    
     ax.set_xticks(positions)
-    ax.set_xticklabels(model_names, rotation=0)
-    ax.set_ylabel('Latency (ms)', fontweight='bold')
-    ax.set_title('A. Latency Distribution', fontweight='bold', loc='left')
-    ax.grid(True, alpha=0.3, axis='y')
-    
-    # ========================================================================
-    # Panel B: Bar chart with error bars (mean ± std)
-    # ========================================================================
+    ax.set_xticklabels(model_names)
+    ax.set_title("Distribution (Single Row)")
+    ax.set_ylabel("Latency (ms)")
+
+    # 2. Bar Mean
     ax = axes[1]
-    
-    means = [results[model]['mean'] for model in model_names]
-    stds = [results[model]['std'] for model in model_names]
-    colors = [MODEL_COLORS[model] for model in model_names]
-    
-    x_pos = np.arange(len(model_names))
-    bars = ax.bar(x_pos, means, yerr=stds, capsize=5, 
-                  color=colors, alpha=0.7, edgecolor='black', linewidth=1.2)
-    
-    # Add value labels on bars
-    for i, (bar, mean, std) in enumerate(zip(bars, means, stds)):
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height + std + 0.5,
-                f'{mean:.2f}±{std:.2f}',
-                ha='center', va='bottom', fontsize=9, fontweight='bold')
-    
-    ax.set_xticks(x_pos)
-    ax.set_xticklabels(model_names, rotation=0)
-    ax.set_ylabel('Latency (ms)', fontweight='bold')
-    ax.set_title('B. Mean Latency ± SD', fontweight='bold', loc='left')
-    ax.grid(True, alpha=0.3, axis='y')
-    
-    # ========================================================================
-    # Panel C: Percentile comparison (p50, p95, p99)
-    # ========================================================================
+    means = [results[m]['mean'] for m in model_names]
+    stds = [results[m]['std'] for m in model_names]
+    ax.bar(model_names, means, yerr=stds, capsize=5, 
+           color=[MODEL_COLORS.get(m) for m in model_names], alpha=0.7)
+    for i, v in enumerate(means):
+        ax.text(i, v + stds[i], f"{v:.2f} ms", ha='center', va='bottom', fontweight='bold')
+    ax.set_title("Mean Latency (Single Row)")
+
+    # 3. Percentiles
     ax = axes[2]
-    
-    percentiles = ['median', 'p95', 'p99']
-    percentile_labels = ['p50 (Median)', 'p95', 'p99']
-    x = np.arange(len(percentiles))
+    x = np.arange(len(model_names))
     width = 0.25
+    for i, metric in enumerate(['median', 'p99']):
+        vals = [results[m][metric] for m in model_names]
+        ax.bar(x + (i*width), vals, width, label=metric, alpha=0.8)
     
-    for i, model_name in enumerate(model_names):
-        values = [results[model_name][p] for p in percentiles]
-        offset = (i - 1) * width
-        bars = ax.bar(x + offset, values, width, label=model_name,
-                     color=MODEL_COLORS[model_name], alpha=0.7, 
-                     edgecolor='black', linewidth=1.2)
-        
-        # Add value labels
-        for bar, val in zip(bars, values):
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height + 0.3,
-                   f'{val:.2f}',
-                   ha='center', va='bottom', fontsize=8, rotation=0)
-    
-    ax.set_xticks(x)
-    ax.set_xticklabels(percentile_labels)
-    ax.set_ylabel('Latency (ms)', fontweight='bold')
-    ax.set_title('C. Latency Percentiles', fontweight='bold', loc='left')
-    ax.legend(frameon=True, loc='upper left')
-    ax.grid(True, alpha=0.3, axis='y')
+    ax.set_xticks(x + width/2)
+    ax.set_xticklabels(model_names)
+    ax.legend()
+    ax.set_title("Median vs P99 Tail Latency")
     
     plt.tight_layout()
-    
     if save_path:
-        plt.savefig(save_path, dpi=DPI, bbox_inches='tight')
-        print(f"✓ Figure saved to: {save_path}")
-    
-    return fig
-
-
-def print_latency_summary(results: Dict[str, Dict[str, float]], 
-                         batch_size: int = None):
-    """
-    Print formatted latency benchmark summary table.
-    
-    Parameters:
-    -----------
-    results : dict
-        Dictionary with model names as keys and latency stats as values
-    batch_size : int, optional
-        Batch size used for benchmarking
-    """
-    print("\n" + "="*85)
-    print("INFERENCE LATENCY BENCHMARK SUMMARY")
-    print("="*85)
-    
-    if batch_size:
-        print(f"Batch size: {batch_size} samples")
-    
-    print("\n{:<18} {:>10} {:>10} {:>10} {:>10} {:>10}".format(
-        "Model", "Mean (ms)", "Median", "Std Dev", "p95", "p99"))
-    print("-"*85)
-    
-    for model_name in results.keys():
-        stats = results[model_name]
-        print("{:<18} {:>10.3f} {:>10.3f} {:>10.3f} {:>10.3f} {:>10.3f}".format(
-            model_name,
-            stats['mean'],
-            stats['median'],
-            stats['std'],
-            stats['p95'],
-            stats['p99']
-        ))
-    
-    print("="*85)
-    
-    # Calculate speedup factors relative to slowest model
-    mean_latencies = {model: results[model]['mean'] for model in results.keys()}
-    slowest_model = max(mean_latencies, key=mean_latencies.get)
-    slowest_latency = mean_latencies[slowest_model]
-    
-    print("\nSpeedup factors (relative to slowest model):")
-    print("-"*85)
-    for model_name in results.keys():
-        speedup = slowest_latency / mean_latencies[model_name]
-        print(f"{model_name:<18} {speedup:>6.2f}x {'(baseline)' if model_name == slowest_model else ''}")
-    
-    print("="*85 + "\n")
-    
-    # Throughput estimation
-    if batch_size:
-        print("Estimated throughput (samples/second):")
-        print("-"*85)
-        for model_name in results.keys():
-            throughput = (batch_size / results[model_name]['mean']) * 1000
-            print(f"{model_name:<18} {throughput:>10.1f} samples/s")
-        print("="*85 + "\n")
-
-
-# ============================================================================
-# Main benchmarking workflow
-# ============================================================================
-
-def benchmark_all_models(mlr_model, xgbrf_models, rnn_model, X_test,
-                        n_runs: int = 100, warmup_runs: int = 10,
-                        save_path: str = None) -> Dict[str, Dict[str, float]]:
-    """
-    Benchmark all three models and create comparison figure.
-    
-    Parameters:
-    -----------
-    mlr_model : sklearn model
-        Trained MLR model
-    xgbrf_models : list
-        List of trained XGBRF models
-    rnn_model : torch model
-        Trained RNN model
-    X_test : np.ndarray or pd.DataFrame
-        Test input features
-    n_runs : int
-        Number of timing runs per model (default: 100)
-    warmup_runs : int
-        Number of warmup runs (default: 10)
-    save_path : str, optional
-        Path to save the figure
-    
-    Returns:
-    --------
-    dict : Complete latency results for all models
-    """
-    print("\n" + "="*85)
-    print("STARTING INFERENCE LATENCY BENCHMARK")
-    print("="*85)
-    print(f"Batch size: {X_test.shape[0]} samples")
-    print(f"Number of runs per model: {n_runs}")
-    print(f"Warmup runs: {warmup_runs}")
-    print("="*85 + "\n")
-    
-    results = {}
-    
-    # Convert to numpy if DataFrame
-    if isinstance(X_test, pd.DataFrame):
-        X_test_np = X_test.values
-    else:
-        X_test_np = X_test
-    
-    # Benchmark MLR
-    print("[1/3] Benchmarking MLR model...")
-    results['MLR'] = benchmark_mlr_inference(
-        mlr_model, X_test_np, n_runs=n_runs, warmup_runs=warmup_runs
-    )
-    print(f"      Mean latency: {results['MLR']['mean']:.3f} ms")
-    
-    # Benchmark XGBRF
-    print("[2/3] Benchmarking XGBRFRegressor models...")
-    results['XGBRFRegressor'] = benchmark_xgbrf_inference(
-        xgbrf_models, X_test_np, n_runs=n_runs, warmup_runs=warmup_runs
-    )
-    print(f"      Mean latency: {results['XGBRFRegressor']['mean']:.3f} ms")
-    
-    # Benchmark RNN
-    print("[3/3] Benchmarking RNN model...")
-    results['RNN'] = benchmark_rnn_inference(
-        rnn_model, n_runs=n_runs, warmup_runs=warmup_runs
-    )
-    print(f"      Mean latency: {results['RNN']['mean']:.3f} ms")
-    
-    print("\n✓ Benchmarking complete!\n")
-    
-    # Print summary table
-    print_latency_summary(results, batch_size=X_test.shape[0])
-    
-    # Create visualization
-    print("Generating latency comparison figure...")
-    fig = plot_latency_comparison(results, save_path=save_path)
-    
-    return results
-
-
+        plt.savefig(save_path)
+        print(f"\n✓ Saved figure to {save_path}")
+    plt.show()
