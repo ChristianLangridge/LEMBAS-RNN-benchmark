@@ -83,13 +83,21 @@ def benchmark_rnn_inference(model, X_input: torch.Tensor, n_runs: int = 100,
     
     # Ensure model is in eval mode
     model.eval()
-    
-    # Warmup
+   
+    # DEBUG: Check what the model thinks it's doing
+    print(f"DEBUGGING: Input shape: {X_input.shape}")
+    try:
+        # For LSTM/GRU, weight_ih_l0 size reveals the expected input feature size
+        print(f"DEBUG: Model expects input_size: {model.rnn.input_size}")
+    except:
+        pass
+        
     with torch.no_grad():
         for _ in range(warmup_runs):
             _ = model(X_input)
     
     latencies = []
+    
     with torch.no_grad():
         for _ in range(n_runs):
             start = time.perf_counter()
@@ -135,9 +143,10 @@ def run_benchmarks(mlr_model, xgbrf_models, rnn_model, X_full,
 
     # Prepare Tensors for RNN
     # We assume the RNN model was trained on the same device (CPU usually for inference tests)
+    # Prepare Tensors for RNN
     X_torch_full = torch.tensor(X_np_full, dtype=torch.float32)
     X_torch_single = torch.tensor(X_np_single, dtype=torch.float32)
-
+ 
     # ---------------------------------------------------------
     # 2. RUN TRUE LATENCY TEST (Batch Size = 1)
     # ---------------------------------------------------------
