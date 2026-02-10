@@ -1,13 +1,12 @@
 """
-COMPLETE IMPLEMENTATION:
-- MLR: LinearExplainer (exact, analytical)
-- XGBRF: TreeExplainer (exact, fast) with batch extraction
-- RNN: DeepExplainer (gradient-based, ~50x faster than KernelExplainer)
+Gene-Specific SHAP with GradientExplainer for RNN (Subset 50)
+=============================================================
 """
 
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn as nn
 import joblib
 import shap
 import json
@@ -37,10 +36,9 @@ os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
 # XGBRF settings
 XGBRF_BATCH_SIZE = 1000
 
-# RNN settings (DeepExplainer is much faster - can use full dataset!)
-BACKGROUND_SAMPLES_RNN = 20   # DeepExplainer needs far fewer samples
-RNN_COMPUTE_ALL_SAMPLES = True  # Can now compute on all 262 samples (fast!)
-ENABLE_RNN = True  
+# RNN settings
+RNN_SUBSET_SIZE = 50 # Compute only for the first N instances
+ENABLE_RNN = False  # computing remaining RNN SHAP values in seperate script 
 
 # ============================================================================
 # Utility Functions
@@ -85,7 +83,7 @@ print_section("STEP 1: Loading Validation Data")
 validation_dataset = pd.read_csv(f'{DATA_BASE_PATH}/Full data files/Liver_bulk_external.tsv', 
                                  sep='\t', header=0, index_col=0)
 
-# Generate x_validation (TF features)
+# Generate x_validation
 net = pd.read_csv(f'{DATA_BASE_PATH}/Full data files/network(full).tsv', sep='\t')
 network_tfs = set(net['TF'].unique())
 network_genes = set(net['Gene'].unique())
@@ -105,7 +103,7 @@ for feature in missing_features:
     x_validation[feature] = 0
 x_validation = x_validation[usable_features]
 
-# Generate y_validation (Gene expression features)
+# Generate y_validation
 gene_expression_ref = pd.read_csv(f"{DATA_BASE_PATH}/Full data files/Geneexpression (full).tsv", 
                                   sep="\t", header=0, index_col=0)
 expected_features = gene_expression_ref.columns.tolist()
@@ -149,19 +147,14 @@ if not gene_indices:
 
 print_section("STEP 3: Loading Trained Models")
 
-# ────────────────────────────────────────────────────────────────────────────
 # MLR
-# ────────────────────────────────────────────────────────────────────────────
 print("Loading MLR model...")
 mlr_path = f'{MODELS_BASE_PATH}/MLR/MLR_v3/MLR_model_v4(uncentered[FINAL]).joblib'
 mlr_model = joblib.load(mlr_path)
 print(f"  ✓ MLR loaded")
 print(f"  Coefficient shape: {mlr_model.coef_.shape}")
-print(f"  Intercept shape: {mlr_model.intercept_.shape}")
 
-# ────────────────────────────────────────────────────────────────────────────
-# XGBRF (Batch Structure)
-# ────────────────────────────────────────────────────────────────────────────
+# XGBRF
 print("\n" + "─"*80)
 print("Loading XGBRF models (Batch Structure)")
 print("─"*80)
@@ -169,12 +162,8 @@ print("─"*80)
 xgbrf_path = f'{MODELS_BASE_PATH}/XGBRF/XGBRF_v5/all_models_batch_XGBRF[uncentered_REALFINAL].joblib'
 xgbrf_batch_models = joblib.load(xgbrf_path)
 
-print(f"  ✓ Ensemble loaded")
-print(f"  Structure: List of {len(xgbrf_batch_models)} batch models")
-print(f"  Batch size: {XGBRF_BATCH_SIZE} genes per batch")
-print(f"  Total gene capacity: {len(xgbrf_batch_models) * XGBRF_BATCH_SIZE}")
+print(f"  ✓ Ensemble loaded ({len(xgbrf_batch_models)} batches)")
 
-# Extract specific gene models
 gene_specific_xgb_models = {}
 
 for gene in GENES_OF_INTEREST:
@@ -183,40 +172,30 @@ for gene in GENES_OF_INTEREST:
     
     gene_idx = gene_indices[gene]
     batch_idx = gene_idx // XGBRF_BATCH_SIZE
-    within_batch_idx = gene_idx % XGBRF_BATCH_SIZE
+    within_batch_idx = gene_idx // XGBRF_BATCH_SIZE
     
-    print(f"\n  {gene}:")
-    print(f"    Global gene index: {gene_idx}")
-    print(f"    Batch index: {batch_idx}")
-    print(f"    Within-batch index: {within_batch_idx}")
+    print(f"\n  {gene}: batch {batch_idx}, position {within_batch_idx}")
     
     try:
         model = extract_xgbrf_model_from_batches(xgbrf_batch_models, gene_idx, XGBRF_BATCH_SIZE)
         gene_specific_xgb_models[gene] = model
-        
-        # Test prediction
-        dummy_X = np.random.randn(5, x_validation.shape[1])
-        pred = model.predict(dummy_X)
-        print(f"    ✓ Successfully extracted model")
-        print(f"    ✓ Test prediction successful: shape {pred.shape}")
+        print(f"    ✓ Extracted")
         
     except Exception as e:
-        print(f"    ✗ Extraction failed: {e}")
+        print(f"    ✗ Failed: {e}")
 
-# Cleanup
 del xgbrf_batch_models
 gc.collect()
-print("\n  ✓ Batch models purged from memory")
+print("\n  ✓ Batch models purged")
 
-# ────────────────────────────────────────────────────────────────────────────
-# RNN (if enabled)
-# ────────────────────────────────────────────────────────────────────────────
+# RNN
 rnn_model = None
 if ENABLE_RNN:
     print("\n" + "─"*80)
-    print("Loading RNN model (for DeepExplainer)")
+    print("Loading RNN model (for GradientExplainer)")
     print("─"*80)
     
+    # Load on CPU initially to match the loading function signature
     rnn_model = load_model_from_checkpoint(
         checkpoint_path=f'{MODELS_BASE_PATH}/RNN/uncentered_data_RNN/signaling_model.v1.pt',
         net_path=f'{DATA_BASE_PATH}/Full data files/network(full).tsv',
@@ -225,8 +204,8 @@ if ENABLE_RNN:
         device='cpu',
         use_exact_training_params=True
     )
-    rnn_model.eval()  # Important for DeepExplainer
-    print("  ✓ RNN loaded and set to eval mode")
+    # Don't move to GPU yet - we do that per-gene to keep memory clean or generally below
+    print("  ✓ RNN loaded (CPU)")
 else:
     print("\n⊗ RNN DISABLED (set ENABLE_RNN=True to compute)")
 
@@ -243,8 +222,6 @@ shap_results = {
         'n_samples': x_validation.shape[0],
         'n_features': x_validation.shape[1],
         'feature_names': feature_names_list,
-        'xgbrf_batch_size': XGBRF_BATCH_SIZE,
-        'rnn_background_samples': BACKGROUND_SAMPLES_RNN if ENABLE_RNN else None,
         'date_created': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     },
     'MLR': {},
@@ -254,59 +231,45 @@ shap_results = {
 
 for gene_name in GENES_OF_INTEREST:
     if gene_name not in gene_indices:
-        print(f"\n✗ Skipping {gene_name} - not found in gene columns")
         continue
     
     gene_idx = gene_indices[gene_name]
     
     print(f"\n{'─'*80}")
-    print(f"Processing {gene_name} (global index {gene_idx})")
+    print(f"Processing {gene_name} (index {gene_idx})")
     print(f"{'─'*80}")
     
     # ────────────────────────────────────────────────────────────────────────
-    # MLR (LinearExplainer - unchanged)
+    # MLR (unchanged)
     # ────────────────────────────────────────────────────────────────────────
     print(f"\n[{gene_name}] Computing MLR SHAP values...")
     try:
         from sklearn.linear_model import LinearRegression
         
-        # Extract coefficients for this gene
         if hasattr(mlr_model, 'estimators_'):
-            specific_estimator = mlr_model.estimators_[gene_idx]
-            coef = specific_estimator.coef_
-            intercept = specific_estimator.intercept_
+            coef = mlr_model.estimators_[gene_idx].coef_
+            intercept = mlr_model.estimators_[gene_idx].intercept_
         else:
             coef = mlr_model.coef_[gene_idx, :]
             intercept = mlr_model.intercept_[gene_idx]
         
-        # Create properly initialized proxy model
         proxy_model = LinearRegression()
-        
-        # Ensure 2D shape (1, n_features)
         proxy_model.coef_ = coef.reshape(1, -1) if coef.ndim == 1 else coef
         
-        # Ensure intercept is array
         if hasattr(intercept, '__len__'):
             proxy_model.intercept_ = np.array([intercept[0] if len(intercept) > 0 else intercept])
         else:
             proxy_model.intercept_ = np.array([intercept])
         
-        # Set required sklearn metadata
         proxy_model.n_features_in_ = x_validation.shape[1]
         proxy_model._sklearn_version = "1.0.0"
         
-        # Validate with test prediction
         test_pred = proxy_model.predict(x_validation.iloc[:5])
-        print(f"  Test prediction: shape {test_pred.shape}, mean {test_pred.mean():.4f}")
+        print(f"  Test: mean {test_pred.mean():.4f}")
         
-        # Compute SHAP with LinearExplainer
-        print(f"  Creating LinearExplainer...")
         mlr_explainer = shap.LinearExplainer(proxy_model, x_validation)
-        
-        print(f"  Computing SHAP values...")
         mlr_shap_gene = mlr_explainer.shap_values(x_validation)
         
-        # Handle dimensionality
         if mlr_shap_gene.ndim == 3:
             mlr_shap_gene = mlr_shap_gene[:, :, 0]
         
@@ -320,41 +283,31 @@ for gene_name in GENES_OF_INTEREST:
             'explainer_type': 'LinearExplainer'
         }
         
-        print(f"  ✓ MLR SHAP shape: {mlr_shap_gene.shape}")
-        print(f"  ✓ Expected value: {mlr_expected_value:.4f}")
-        print(f"  ✓ Mean |SHAP|: {np.abs(mlr_shap_gene).mean():.6f}")
+        print(f"  ✓ Shape: {mlr_shap_gene.shape}, Expected: {mlr_expected_value:.4f}")
         
     except Exception as e:
-        print(f"  ✗ MLR failed: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"  ✗ Failed: {e}")
         shap_results['MLR'][gene_name] = None
     
     # ────────────────────────────────────────────────────────────────────────
-    # XGBRF (TreeExplainer - unchanged)
+    # XGBRF (unchanged)
     # ────────────────────────────────────────────────────────────────────────
     print(f"\n[{gene_name}] Computing XGBRF SHAP values...")
     
     if gene_name not in gene_specific_xgb_models:
-        print(f"  ✗ Skipping - model extraction failed")
+        print(f"  ✗ Skipping")
         shap_results['XGBRF'][gene_name] = None
         continue
     
     try:
         specific_xgb_model = gene_specific_xgb_models[gene_name]
         
-        # Test prediction first
         test_pred = specific_xgb_model.predict(x_validation.iloc[:5].values)
-        print(f"  Test prediction: shape {test_pred.shape}, mean {test_pred.mean():.4f}")
+        print(f"  Test: mean {test_pred.mean():.4f}")
         
-        # Use TreeExplainer (exact and fast)
-        print(f"  Creating TreeExplainer...")
         xgb_explainer = shap.TreeExplainer(specific_xgb_model)
-        
-        print(f"  Computing SHAP values...")
         xgb_shap_values = xgb_explainer.shap_values(x_validation, check_additivity=False)
         
-        # Handle list return (some SHAP versions)
         if isinstance(xgb_shap_values, list):
             xgb_shap_values = xgb_shap_values[0]
         
@@ -368,94 +321,97 @@ for gene_name in GENES_OF_INTEREST:
             'explainer_type': 'TreeExplainer'
         }
         
-        print(f"  ✓ XGBRF SHAP shape: {xgb_shap_values.shape}")
-        print(f"  ✓ Expected value: {xgb_expected_value:.4f}")
-        print(f"  ✓ Mean |SHAP|: {np.abs(xgb_shap_values).mean():.6f}")
+        print(f"  ✓ Shape: {xgb_shap_values.shape}, Expected: {xgb_expected_value:.4f}")
         
     except Exception as e:
-        print(f"  ✗ XGBRF failed: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"  ✗ Failed: {e}")
         shap_results['XGBRF'][gene_name] = None
     
     # ────────────────────────────────────────────────────────────────────────
-    # RNN (DeepExplainer - NEW!)
+    # RNN (GradientExplainer - GPU ACCELERATED)
     # ────────────────────────────────────────────────────────────────────────
     if ENABLE_RNN:
-        print(f"\n[{gene_name}] Computing RNN SHAP values with DeepExplainer...")
+        print(f"\n[{gene_name}] Computing RNN SHAP values with GradientExplainer...")
         try:
-            # Prepare background data (DeepExplainer needs much less!)
-            background_data = shap.sample(x_validation, BACKGROUND_SAMPLES_RNN)
-            background_tensor = torch.FloatTensor(background_data.values)
+            # 1. Setup GPU Device
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            print(f"  ✓ Hardware acceleration: {device.upper()}")
             
-            print(f"  Background samples: {BACKGROUND_SAMPLES_RNN}")
-            
-            # Prepare test data
-            if RNN_COMPUTE_ALL_SAMPLES:
-                test_data = x_validation
-                print(f"  Computing SHAP for all {len(test_data)} validation samples")
-            else:
-                test_data = x_validation.iloc[:50]
-                print(f"  Computing SHAP for first 50 validation samples")
-            
-            test_tensor = torch.FloatTensor(test_data.values)
-            
-            # Create DeepExplainer
-            print(f"  Creating DeepExplainer...")
-            
-            # DeepExplainer expects a function that takes tensors and returns tensors
-            # We need to wrap the RNN to return only the specific gene's output
-            class GeneSpecificRNNWrapper(torch.nn.Module):
-                def __init__(self, model, gene_idx):
+            # Move model to GPU and set to EVAL mode
+            # Eval mode is critical: removes dropout randomness and ensures consistent gradients
+            rnn_model = rnn_model.to(device)
+            rnn_model.eval()
+
+            # 2. Define Target Wrapper
+            # The SignalingModel returns a tuple (Y_hat, Y_full).
+            # GradientExplainer requires a callable that returns a single tensor.
+            # We wrap the model to intercept the output and select the specific gene index.
+            class GeneTargetWrapper(nn.Module):
+                def __init__(self, model, target_idx):
                     super().__init__()
                     self.model = model
-                    self.gene_idx = gene_idx
-                
+                    self.target_idx = target_idx
+                    
                 def forward(self, x):
-                    # Get full predictions
-                    full_predictions, _ = self.model(x)
-                    # Return only the specific gene's predictions
-                    return full_predictions[:, self.gene_idx:self.gene_idx+1]
+                    # Forward pass returns (Y_hat, Y_full), we only need Y_hat
+                    y_hat, _ = self.model(x)
+                    # Return specific gene column shaped as (Batch, 1)
+                    return y_hat[:, self.target_idx].unsqueeze(1)
+
+            # 3. Create Background (Must be Small & Tensor)
+            # We sample 25 instances to serve as the background expectation.
+            # Using too many samples here causes the explosion in compute time.
+            print("  Generating background summary (N=25)...")
+            background_data = shap.sample(x_validation, 25) 
+            background_tensor = torch.FloatTensor(background_data.values).to(device)
+
+            # 4. Initialize GradientExplainer
+            # We pass the wrapped model which now behaves like a standard regression network
+            target_model = GeneTargetWrapper(rnn_model, gene_idx)
+            rnn_explainer = shap.GradientExplainer(target_model, background_tensor)
             
-            wrapped_model = GeneSpecificRNNWrapper(rnn_model, gene_idx)
-            wrapped_model.eval()
+            # 5. Prepare Input Data (Subset)
+            x_subset = x_validation.iloc[:RNN_SUBSET_SIZE]
+            x_subset_tensor = torch.FloatTensor(x_subset.values).to(device)
             
-            # Create explainer
-            rnn_explainer = shap.DeepExplainer(wrapped_model, background_tensor)
+            # 6. Compute SHAP values
+            print(f"  Computing gradients for {len(x_subset)} instances...")
+            rnn_shap_values = rnn_explainer.shap_values(x_subset_tensor)
             
-            # Compute SHAP values
-            print(f"  Computing SHAP values (this should be fast!)...")
-            rnn_shap_values = rnn_explainer.shap_values(test_tensor)
-            
-            # DeepExplainer returns numpy array
+            # GradientExplainer returns a list of tensors (one per output). 
+            # Since our wrapper outputs 1 column, the list has length 1.
             if isinstance(rnn_shap_values, list):
                 rnn_shap_values = rnn_shap_values[0]
             
-            # Ensure 2D shape (samples, features)
-            if rnn_shap_values.ndim == 3:
-                rnn_shap_values = rnn_shap_values.squeeze(-1)
-            
-            # Get expected value (base prediction on background)
+            # 7. Metadata & Storage
+            # Note: GradientExplainer doesn't have a simple .expected_value like KernelExplainer
+            # We approximate it by taking the mean prediction of the background
             with torch.no_grad():
-                background_pred, _ = rnn_model(background_tensor)
-                rnn_expected_value = float(background_pred[:, gene_idx].mean().item())
+                expected_value_tensor = target_model(background_tensor).mean()
+                rnn_expected_value = float(expected_value_tensor.cpu().numpy())
             
             shap_results['RNN'][gene_name] = {
-                'shap_values': rnn_shap_values,
+                'shap_values': rnn_shap_values, # Already numpy array if shap version is recent, else might need .cpu().numpy()
                 'expected_value': rnn_expected_value,
-                'explainer_type': 'DeepExplainer',
-                'n_samples_computed': len(test_data)
+                'explainer_type': 'GradientExplainer',
+                'n_samples_computed': len(x_subset),
+                'subset_indices': x_subset.index.tolist()
             }
             
-            print(f"  ✓ RNN SHAP shape: {rnn_shap_values.shape}")
-            print(f"  ✓ Expected value: {rnn_expected_value:.4f}")
-            print(f"  ✓ Mean |SHAP|: {np.abs(rnn_shap_values).mean():.6f}")
+            print(f"  ✓ Shape: {rnn_shap_values.shape}")
             
         except Exception as e:
             print(f"  ✗ RNN failed: {e}")
             import traceback
             traceback.print_exc()
             shap_results['RNN'][gene_name] = None
+            
+        finally:
+            # Clean up GPU memory after this gene
+            if 'x_subset_tensor' in locals(): del x_subset_tensor
+            if 'background_tensor' in locals(): del background_tensor
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
 # ============================================================================
 # STEP 5: Save Results
@@ -472,65 +428,26 @@ save_dict = {
     'gene_indices': json.dumps(gene_indices)
 }
 
-# Save SHAP values for each model
 for model_name in ['MLR', 'XGBRF', 'RNN']:
     for gene_name in GENES_OF_INTEREST:
         if gene_name in shap_results[model_name] and shap_results[model_name][gene_name] is not None:
             prefix = f'{model_name}_{gene_name}'
             save_dict[f'{prefix}_shap_values'] = shap_results[model_name][gene_name]['shap_values']
             save_dict[f'{prefix}_expected_value'] = shap_results[model_name][gene_name]['expected_value']
+            
+            # Add note for RNN subset if relevant for downstream loading
+            if model_name == 'RNN':
+                 save_dict[f'{prefix}_subset_indices'] = np.array(shap_results['RNN'][gene_name]['subset_indices'])
 
 np.savez_compressed(output_file, **save_dict)
-print(f"✓ Saved SHAP values to: {output_file}")
-print(f"  File size: {os.path.getsize(output_file) / 1e6:.2f} MB")
+print(f"✓ Saved to: {output_file}")
 
-# Save metadata
-metadata_file = f'{OUTPUT_BASE_PATH}/gene_specific_shap_metadata_validation.json'
-metadata_to_save = {
-    'genes': GENES_OF_INTEREST,
-    'gene_indices': {k: int(v) for k, v in gene_indices.items()},
-    'n_samples': int(x_validation.shape[0]),
-    'n_features': int(x_validation.shape[1]),
-    'feature_names': feature_names_list,
-    'xgbrf_batch_size': XGBRF_BATCH_SIZE,
-    'models_computed': [m for m in ['MLR', 'XGBRF', 'RNN'] 
-                        if any(shap_results[m].get(g) is not None for g in GENES_OF_INTEREST)],
-    'explainer_types': {
-        'MLR': 'LinearExplainer',
-        'XGBRF': 'TreeExplainer',
-        'RNN': 'DeepExplainer' if ENABLE_RNN else 'Not computed'
-    },
-    'rnn_background_samples': BACKGROUND_SAMPLES_RNN if ENABLE_RNN else None,
-    'date_created': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-}
+print_section("✓ Script Completed!")
 
-with open(metadata_file, 'w') as f:
-    json.dump(metadata_to_save, f, indent=2)
-print(f"✓ Saved metadata to: {metadata_file}")
-
-# ============================================================================
-# Summary
-# ============================================================================
-
-print_section("✓ Script Completed Successfully!")
-
-print(f"Genes processed: {list(gene_indices.keys())}")
+print(f"Genes: {list(gene_indices.keys())}")
 print(f"\nModels computed:")
 for model_name in ['MLR', 'XGBRF', 'RNN']:
     success_count = sum(1 for g in GENES_OF_INTEREST 
                        if g in shap_results[model_name] 
                        and shap_results[model_name][g] is not None)
     print(f"  {model_name}: {success_count}/{len(GENES_OF_INTEREST)} genes")
-
-print(f"\nOutput files:")
-print(f"  1. {output_file}")
-print(f"  2. {metadata_file}")
-
-print("\n" + "─"*80)
-print("Next Steps:")
-print("─"*80)
-print("1. Run verify_shap_outputs.py to validate and visualize results")
-if not ENABLE_RNN:
-    print("2. Set ENABLE_RNN=True to compute RNN SHAP values (~2-3 minutes)")
-print("3. Create publication-quality waterfall/beeswarm plots")
-print("4. Compare feature importance across models")
