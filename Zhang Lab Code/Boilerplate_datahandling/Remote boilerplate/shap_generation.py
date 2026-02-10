@@ -1,13 +1,8 @@
 """
-Gene-Specific SHAP Value Generation - FINAL CORRECTED VERSION
-==============================================================
-
-FIXES:
-1. MLR: Proper sklearn proxy model initialization with 2D reshaping
-2. XGBRF: Correct batch-based extraction (17 batches × 1000 genes each)
-3. RNN: Reduced computational budget with staged testing
-
-This version correctly handles the XGBRF batch training structure.
+COMPLETE IMPLEMENTATION:
+- MLR: LinearExplainer (exact, analytical)
+- XGBRF: TreeExplainer (exact, fast) with batch extraction
+- RNN: DeepExplainer (gradient-based, ~50x faster than KernelExplainer)
 """
 
 import numpy as np
@@ -39,13 +34,13 @@ DATA_BASE_PATH = '/home/christianl/Zhang-Lab/Zhang Lab Data'
 
 os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
 
-# XGBRF batch structure
-XGBRF_BATCH_SIZE = 1000  # As used in training
+# XGBRF settings
+XGBRF_BATCH_SIZE = 1000
 
-# RNN settings (reduced for testing)
-BACKGROUND_SAMPLES_RNN = 50
-RNN_TEST_SAMPLES = 50
-ENABLE_RNN = False  # Enable after MLR/XGBRF validated
+# RNN settings (DeepExplainer is much faster - can use full dataset!)
+BACKGROUND_SAMPLES_RNN = 20   # DeepExplainer needs far fewer samples
+RNN_COMPUTE_ALL_SAMPLES = True  # Can now compute on all 262 samples (fast!)
+ENABLE_RNN = True  
 
 # ============================================================================
 # Utility Functions
@@ -64,46 +59,22 @@ def find_gene_index(gene_name, gene_columns):
         return None
 
 def extract_xgbrf_model_from_batches(batch_models, gene_idx, batch_size=1000):
-    """
-    Extract a single gene's model from batch-trained XGBRF ensemble.
-    
-    Args:
-        batch_models: List of MultiOutputRegressor objects
-        gene_idx: Global gene index (0-16099)
-        batch_size: Number of genes per batch (default 1000)
-    
-    Returns:
-        Single XGBRFRegressor model for the specified gene
-    """
+    """Extract single gene model from batch-trained XGBRF ensemble."""
     batch_idx = gene_idx // batch_size
     within_batch_idx = gene_idx % batch_size
     
     if batch_idx >= len(batch_models):
-        raise IndexError(f"Batch index {batch_idx} out of range (max {len(batch_models)-1})")
+        raise IndexError(f"Batch index {batch_idx} out of range")
     
     batch_model = batch_models[batch_idx]
     
     if not hasattr(batch_model, 'estimators_'):
-        raise AttributeError(f"Batch model at index {batch_idx} is not a MultiOutputRegressor")
+        raise AttributeError(f"Batch model is not a MultiOutputRegressor")
     
     if within_batch_idx >= len(batch_model.estimators_):
-        raise IndexError(f"Within-batch index {within_batch_idx} out of range for batch {batch_idx}")
+        raise IndexError(f"Within-batch index {within_batch_idx} out of range")
     
     return batch_model.estimators_[within_batch_idx]
-
-def create_gene_specific_predictor(model, gene_idx):
-    """Create RNN prediction function for specific gene."""
-    def predictor(X):
-        if isinstance(X, pd.DataFrame):
-            X_array = X.values
-        else:
-            X_array = X
-        X_tensor = torch.FloatTensor(X_array)
-        with torch.no_grad():
-            full_predictions, _ = model(X_tensor)
-            gene_predictions = full_predictions[:, gene_idx].numpy()
-        return gene_predictions.reshape(-1, 1)
-    return predictor
 
 # ============================================================================
 # STEP 1: Load Validation Data
@@ -166,10 +137,10 @@ for gene in GENES_OF_INTEREST:
         gene_indices[gene] = idx
         print(f"✓ Found {gene} at global index {idx}")
     else:
-        print(f"✗ Warning: {gene} not found in gene columns")
+        print(f"✗ Warning: {gene} not found")
 
 if not gene_indices:
-    print("\n✗ ERROR: None of the genes of interest were found!")
+    print("\n✗ ERROR: No genes found!")
     sys.exit(1)
 
 # ============================================================================
@@ -189,7 +160,7 @@ print(f"  Coefficient shape: {mlr_model.coef_.shape}")
 print(f"  Intercept shape: {mlr_model.intercept_.shape}")
 
 # ────────────────────────────────────────────────────────────────────────────
-# XGBRF (Batch-Based Extraction)
+# XGBRF (Batch Structure)
 # ────────────────────────────────────────────────────────────────────────────
 print("\n" + "─"*80)
 print("Loading XGBRF models (Batch Structure)")
@@ -203,12 +174,11 @@ print(f"  Structure: List of {len(xgbrf_batch_models)} batch models")
 print(f"  Batch size: {XGBRF_BATCH_SIZE} genes per batch")
 print(f"  Total gene capacity: {len(xgbrf_batch_models) * XGBRF_BATCH_SIZE}")
 
-# Extract specific gene models using batch logic
+# Extract specific gene models
 gene_specific_xgb_models = {}
 
 for gene in GENES_OF_INTEREST:
     if gene not in gene_indices:
-        print(f"\n  {gene}: Skipping (not found in gene columns)")
         continue
     
     gene_idx = gene_indices[gene]
@@ -223,17 +193,15 @@ for gene in GENES_OF_INTEREST:
     try:
         model = extract_xgbrf_model_from_batches(xgbrf_batch_models, gene_idx, XGBRF_BATCH_SIZE)
         gene_specific_xgb_models[gene] = model
-        print(f"    ✓ Successfully extracted model")
         
         # Test prediction
         dummy_X = np.random.randn(5, x_validation.shape[1])
         pred = model.predict(dummy_X)
+        print(f"    ✓ Successfully extracted model")
         print(f"    ✓ Test prediction successful: shape {pred.shape}")
         
     except Exception as e:
         print(f"    ✗ Extraction failed: {e}")
-        import traceback
-        traceback.print_exc()
 
 # Cleanup
 del xgbrf_batch_models
@@ -241,11 +209,14 @@ gc.collect()
 print("\n  ✓ Batch models purged from memory")
 
 # ────────────────────────────────────────────────────────────────────────────
-# RNN (Optional)
+# RNN (if enabled)
 # ────────────────────────────────────────────────────────────────────────────
 rnn_model = None
 if ENABLE_RNN:
-    print("\nLoading RNN model...")
+    print("\n" + "─"*80)
+    print("Loading RNN model (for DeepExplainer)")
+    print("─"*80)
+    
     rnn_model = load_model_from_checkpoint(
         checkpoint_path=f'{MODELS_BASE_PATH}/RNN/uncentered_data_RNN/signaling_model.v1.pt',
         net_path=f'{DATA_BASE_PATH}/Full data files/network(full).tsv',
@@ -254,7 +225,8 @@ if ENABLE_RNN:
         device='cpu',
         use_exact_training_params=True
     )
-    print("  ✓ RNN loaded")
+    rnn_model.eval()  # Important for DeepExplainer
+    print("  ✓ RNN loaded and set to eval mode")
 else:
     print("\n⊗ RNN DISABLED (set ENABLE_RNN=True to compute)")
 
@@ -272,6 +244,7 @@ shap_results = {
         'n_features': x_validation.shape[1],
         'feature_names': feature_names_list,
         'xgbrf_batch_size': XGBRF_BATCH_SIZE,
+        'rnn_background_samples': BACKGROUND_SAMPLES_RNN if ENABLE_RNN else None,
         'date_created': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     },
     'MLR': {},
@@ -291,7 +264,7 @@ for gene_name in GENES_OF_INTEREST:
     print(f"{'─'*80}")
     
     # ────────────────────────────────────────────────────────────────────────
-    # MLR (Fixed sklearn proxy initialization)
+    # MLR (LinearExplainer - unchanged)
     # ────────────────────────────────────────────────────────────────────────
     print(f"\n[{gene_name}] Computing MLR SHAP values...")
     try:
@@ -309,10 +282,10 @@ for gene_name in GENES_OF_INTEREST:
         # Create properly initialized proxy model
         proxy_model = LinearRegression()
         
-        # FIX: Ensure 2D shape (1, n_features)
+        # Ensure 2D shape (1, n_features)
         proxy_model.coef_ = coef.reshape(1, -1) if coef.ndim == 1 else coef
         
-        # FIX: Ensure intercept is array
+        # Ensure intercept is array
         if hasattr(intercept, '__len__'):
             proxy_model.intercept_ = np.array([intercept[0] if len(intercept) > 0 else intercept])
         else:
@@ -358,7 +331,7 @@ for gene_name in GENES_OF_INTEREST:
         shap_results['MLR'][gene_name] = None
     
     # ────────────────────────────────────────────────────────────────────────
-    # XGBRF (Using extracted batch model)
+    # XGBRF (TreeExplainer - unchanged)
     # ────────────────────────────────────────────────────────────────────────
     print(f"\n[{gene_name}] Computing XGBRF SHAP values...")
     
@@ -406,47 +379,77 @@ for gene_name in GENES_OF_INTEREST:
         shap_results['XGBRF'][gene_name] = None
     
     # ────────────────────────────────────────────────────────────────────────
-    # RNN (KernelExplainer with reduced samples)
+    # RNN (DeepExplainer - NEW!)
     # ────────────────────────────────────────────────────────────────────────
     if ENABLE_RNN:
-        print(f"\n[{gene_name}] Computing RNN SHAP values...")
-        print(f"  Background samples: {BACKGROUND_SAMPLES_RNN}")
-        print(f"  Test samples: {RNN_TEST_SAMPLES}")
-        
+        print(f"\n[{gene_name}] Computing RNN SHAP values with DeepExplainer...")
         try:
-            rnn_gene_predictor = create_gene_specific_predictor(rnn_model, gene_idx)
+            # Prepare background data (DeepExplainer needs much less!)
+            background_data = shap.sample(x_validation, BACKGROUND_SAMPLES_RNN)
+            background_tensor = torch.FloatTensor(background_data.values)
             
-            # Test prediction
-            test_pred = rnn_gene_predictor(x_validation.iloc[:5].values)
-            print(f"  Test prediction: shape {test_pred.shape}, mean {test_pred.mean():.4f}")
+            print(f"  Background samples: {BACKGROUND_SAMPLES_RNN}")
             
-            # Reduce computation
-            x_val_subset = x_validation.iloc[:RNN_TEST_SAMPLES]
-            background = shap.sample(x_validation, min(BACKGROUND_SAMPLES_RNN, len(x_validation)))
+            # Prepare test data
+            if RNN_COMPUTE_ALL_SAMPLES:
+                test_data = x_validation
+                print(f"  Computing SHAP for all {len(test_data)} validation samples")
+            else:
+                test_data = x_validation.iloc[:50]
+                print(f"  Computing SHAP for first 50 validation samples")
             
-            print(f"  Creating KernelExplainer...")
-            rnn_explainer = shap.KernelExplainer(rnn_gene_predictor, background)
+            test_tensor = torch.FloatTensor(test_data.values)
             
-            print(f"  Computing SHAP values (may take 10-30 minutes)...")
-            rnn_shap_gene = rnn_explainer.shap_values(x_val_subset, silent=False)
+            # Create DeepExplainer
+            print(f"  Creating DeepExplainer...")
             
-            rnn_expected_value = rnn_explainer.expected_value
-            if hasattr(rnn_expected_value, '__len__'):
-                rnn_expected_value = float(rnn_expected_value[0])
+            # DeepExplainer expects a function that takes tensors and returns tensors
+            # We need to wrap the RNN to return only the specific gene's output
+            class GeneSpecificRNNWrapper(torch.nn.Module):
+                def __init__(self, model, gene_idx):
+                    super().__init__()
+                    self.model = model
+                    self.gene_idx = gene_idx
+                
+                def forward(self, x):
+                    # Get full predictions
+                    full_predictions, _ = self.model(x)
+                    # Return only the specific gene's predictions
+                    return full_predictions[:, self.gene_idx:self.gene_idx+1]
             
-            if rnn_shap_gene.ndim == 3:
-                rnn_shap_gene = rnn_shap_gene[:, :, 0]
+            wrapped_model = GeneSpecificRNNWrapper(rnn_model, gene_idx)
+            wrapped_model.eval()
+            
+            # Create explainer
+            rnn_explainer = shap.DeepExplainer(wrapped_model, background_tensor)
+            
+            # Compute SHAP values
+            print(f"  Computing SHAP values (this should be fast!)...")
+            rnn_shap_values = rnn_explainer.shap_values(test_tensor)
+            
+            # DeepExplainer returns numpy array
+            if isinstance(rnn_shap_values, list):
+                rnn_shap_values = rnn_shap_values[0]
+            
+            # Ensure 2D shape (samples, features)
+            if rnn_shap_values.ndim == 3:
+                rnn_shap_values = rnn_shap_values.squeeze(-1)
+            
+            # Get expected value (base prediction on background)
+            with torch.no_grad():
+                background_pred, _ = rnn_model(background_tensor)
+                rnn_expected_value = float(background_pred[:, gene_idx].mean().item())
             
             shap_results['RNN'][gene_name] = {
-                'shap_values': rnn_shap_gene,
-                'expected_value': float(rnn_expected_value),
-                'explainer_type': 'KernelExplainer',
-                'n_samples_computed': RNN_TEST_SAMPLES
+                'shap_values': rnn_shap_values,
+                'expected_value': rnn_expected_value,
+                'explainer_type': 'DeepExplainer',
+                'n_samples_computed': len(test_data)
             }
             
-            print(f"  ✓ RNN SHAP shape: {rnn_shap_gene.shape}")
+            print(f"  ✓ RNN SHAP shape: {rnn_shap_values.shape}")
             print(f"  ✓ Expected value: {rnn_expected_value:.4f}")
-            print(f"  ✓ Mean |SHAP|: {np.abs(rnn_shap_gene).mean():.6f}")
+            print(f"  ✓ Mean |SHAP|: {np.abs(rnn_shap_values).mean():.6f}")
             
         except Exception as e:
             print(f"  ✗ RNN failed: {e}")
@@ -469,6 +472,7 @@ save_dict = {
     'gene_indices': json.dumps(gene_indices)
 }
 
+# Save SHAP values for each model
 for model_name in ['MLR', 'XGBRF', 'RNN']:
     for gene_name in GENES_OF_INTEREST:
         if gene_name in shap_results[model_name] and shap_results[model_name][gene_name] is not None:
@@ -489,12 +493,14 @@ metadata_to_save = {
     'n_features': int(x_validation.shape[1]),
     'feature_names': feature_names_list,
     'xgbrf_batch_size': XGBRF_BATCH_SIZE,
-    'models': ['MLR', 'XGBRF'] + (['RNN'] if ENABLE_RNN else []),
+    'models_computed': [m for m in ['MLR', 'XGBRF', 'RNN'] 
+                        if any(shap_results[m].get(g) is not None for g in GENES_OF_INTEREST)],
     'explainer_types': {
         'MLR': 'LinearExplainer',
         'XGBRF': 'TreeExplainer',
-        'RNN': 'KernelExplainer' if ENABLE_RNN else 'Not computed'
+        'RNN': 'DeepExplainer' if ENABLE_RNN else 'Not computed'
     },
+    'rnn_background_samples': BACKGROUND_SAMPLES_RNN if ENABLE_RNN else None,
     'date_created': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 }
 
@@ -524,6 +530,7 @@ print("\n" + "─"*80)
 print("Next Steps:")
 print("─"*80)
 print("1. Run verify_shap_outputs.py to validate and visualize results")
-print("2. If satisfied, set ENABLE_RNN=True to compute RNN SHAP values")
+if not ENABLE_RNN:
+    print("2. Set ENABLE_RNN=True to compute RNN SHAP values (~2-3 minutes)")
 print("3. Create publication-quality waterfall/beeswarm plots")
 print("4. Compare feature importance across models")
