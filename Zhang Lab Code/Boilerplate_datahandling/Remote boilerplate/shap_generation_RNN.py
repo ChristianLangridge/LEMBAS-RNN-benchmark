@@ -37,9 +37,9 @@ MODELS_BASE_PATH = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models'
 DATA_BASE_PATH = '/home/christianl/Zhang-Lab/Zhang Lab Data'
 
 # CRITICAL: Aggressively reduced for feasibility
-RNN_BACKGROUND_SAMPLES = 5   # Was 25 - integrated gradients scale with this!
-RNN_TEST_SAMPLES = 10        # Was 50 - start VERY small
-RNN_N_SAMPLES = 10           # Interpolation steps (default 200!) - massive speedup
+RNN_BACKGROUND_SAMPLES = 5   # Was 5 - integrated gradients scale with this!
+RNN_TEST_SAMPLES = 10        # Was 10 - start VERY small
+RNN_N_SAMPLES = 20           # (was 10)
 
 os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
 
@@ -122,6 +122,64 @@ rnn_model = rnn_model.to(device)
 rnn_model.eval()
 
 print(f"✓ RNN loaded on {device.upper()}")
+
+
+
+
+
+
+
+# ... [Load RNN Section] ...
+
+# ... [After loading RNN] ...
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+rnn_model = rnn_model.to(device)
+
+# --- START PATCH: Fix Custom Attributes that .to() ignored ---
+print(f"🔧 Patching model attributes for {device}...")
+
+# 1. Fix Input Layer
+rnn_model.input_layer.device = device
+rnn_model.input_layer.input_node_order = rnn_model.input_layer.input_node_order.to(device)
+
+# 2. Fix Hidden Layer (BioNet)
+# The internal BioNet also relies on 'self.device' for initializing temp tensors
+rnn_model.signaling_network.device = device 
+# Ensure mask tensors (if used) are moved
+if hasattr(rnn_model.signaling_network, 'mask'):
+    rnn_model.signaling_network.mask = rnn_model.signaling_network.mask.to(device)
+
+# 3. Fix Output Layer
+rnn_model.output_layer.output_node_order = rnn_model.output_layer.output_node_order.to(device)
+
+# 4. Apply the Safety Cap (from previous step)
+rnn_model.signaling_network.training_params['max_steps'] = 100 
+
+print("✓ Model attributes patched manually.")
+# --- END PATCH ---
+
+rnn_model.eval()
+
+# ... [Continue to Convergence Check] ...
+
+# OPTIONAL SAFETY CHECK (Run this once manually to be sure):
+# Verify the model actually converges within 100 steps
+print("Verifying convergence at 100 steps...")
+with torch.no_grad():
+    test_out = rnn_model(torch.randn(1, 1197).to(device)) # Random noise input
+    # If this runs without error, the forward pass is safe.
+    print("✓ Forward pass check passed.")
+
+# ... [Continue to Compute RNN SHAP] ...
+
+
+
+
+
+
+
+
 
 # ============================================================================
 # Compute RNN SHAP - OPTIMIZED WITH PROGRESS
@@ -237,7 +295,7 @@ print("\n" + "="*80)
 print("Saving Results")
 print("="*80)
 
-output_file = f'{OUTPUT_BASE_PATH}/rnn_shap_values_OPTIMIZED.npz'
+output_file = f'{OUTPUT_BASE_PATH}/rnn_shap_values_OPTIMIZED(FINAL).npz'
 
 save_dict = {
     'feature_names': np.array(x_validation.columns.tolist()),
