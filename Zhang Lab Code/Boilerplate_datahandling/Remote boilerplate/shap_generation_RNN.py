@@ -37,9 +37,9 @@ MODELS_BASE_PATH = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models'
 DATA_BASE_PATH = '/home/christianl/Zhang-Lab/Zhang Lab Data'
 
 # CRITICAL: Aggressively reduced for feasibility
-RNN_BACKGROUND_SAMPLES = 5   # Was 5 - integrated gradients scale with this!
-RNN_TEST_SAMPLES = 10        # Was 10 - start VERY small
-RNN_N_SAMPLES = 20           # (was 10)
+RNN_BACKGROUND_SAMPLES = 50   # Was 5 - integrated gradients scale with this!
+RNN_TEST_SAMPLES = 262       # Was 10 - start VERY small
+RNN_N_SAMPLES = 25           # (was 10)
 
 os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
 
@@ -295,7 +295,7 @@ print("\n" + "="*80)
 print("Saving Results")
 print("="*80)
 
-output_file = f'{OUTPUT_BASE_PATH}/rnn_shap_values_OPTIMIZED(FINAL).npz'
+output_file = f'{OUTPUT_BASE_PATH}/rnn_shap_values_OPTIMIZED(FINAL-nsamples=262).npz'
 
 save_dict = {
     'feature_names': np.array(x_validation.columns.tolist()),
