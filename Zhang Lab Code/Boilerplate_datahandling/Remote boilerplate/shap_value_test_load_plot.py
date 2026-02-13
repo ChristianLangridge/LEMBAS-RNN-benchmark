@@ -98,15 +98,15 @@ class ShapAnalysisPipeline:
         # 2. Apply Poster Overrides (Scale up for A1 visibility)
         # Note: We must scale up fonts/sizes, otherwise they are unreadable from 2m.
         plt.rcParams.update({
-            'font.size': 16,              
-            'axes.labelsize': 20,         
-            'axes.titlesize': 24,         
-            'xtick.labelsize': 16,        
-            'ytick.labelsize': 16,        
+            'font.size': 11,              
+            'axes.labelsize': 12,         
+            'axes.titlesize': 13,         
+            'xtick.labelsize': 10,        
+            'ytick.labelsize': 10,        
             # Keep your requested linewidths proportional or slightly thicker for poster
-            'axes.linewidth': 2.0,        
-            'xtick.major.width': 2.0,
-            'ytick.major.width': 2.0,
+            'axes.linewidth': 1.2,        
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
         })
 
         genes = ['ALB', 'AFP']
@@ -114,7 +114,7 @@ class ShapAnalysisPipeline:
         
         # 3. Canvas Size: Needs to be much larger than FIGSIZE_WIDE to allow spacing
         # We use (34, 22) to prevent overlap while keeping elements large.
-        fig, axes = plt.subplots(len(genes), len(model_order), figsize=(34, 22))
+        fig, axes = plt.subplots(len(genes), len(model_order), figsize=(75, 50))
         
         for row, gene_name in enumerate(genes):
             # Find Best Sample
@@ -144,29 +144,87 @@ class ShapAnalysisPipeline:
                 plt.sca(ax)
                 shap.plots.waterfall(expl, max_display=9, show=False)
                 
+                # Store references to the SHAP-generated E[f(X)] and f(x) texts before removing them
+                e_fx_text = None
+                f_x_text = None
+                
+                # Collect and remove SHAP-generated special labels
+                texts_to_remove = []
+                for txt in ax.texts:
+                    text_content = txt.get_text()
+                    if "E[f(X)]" in text_content:
+                        e_fx_value = text_content  # Store the full text
+                        texts_to_remove.append(txt)
+                    elif "f(x)" in text_content.lower() and "e[f(x)]" not in text_content.lower():
+                        f_x_value = text_content  # Store the full text
+                        texts_to_remove.append(txt)
+                
+                # Remove the SHAP-generated texts
+                for txt in texts_to_remove:
+                    txt.remove()
+                
+                # Modify label sizes for remaining feature contributions
+                for txt in ax.texts:
+                    text_content = txt.get_text()
+                    if all(x not in text_content for x in ["E[f(X)]", "f(X)", "f(x)", "other"]):
+                        txt.set_fontsize(10)
+                
+                # ---------------------------------------------------------
+                # Manually add aligned E[f(X)] and f(x) labels with strict positioning
+                # ---------------------------------------------------------
+                
+                # Get axis limits to position labels properly
+                ax_xlim = ax.get_xlim()
+                ax_ylim = ax.get_ylim()
+                
+                # Add E[f(X)] - centered at bottom
+                if e_fx_text:
+                    ax.text(0.5, -0.12, e_fx_value, 
+                            transform=ax.transAxes,
+                            horizontalalignment='center',
+                            verticalalignment='top',
+                            fontsize=11,
+                            fontweight='bold')
+                
+                # Add f(x) - centered at top
+                if f_x_text:
+                    ax.text(0.5, 1.05, f_x_value,
+                            transform=ax.transAxes,
+                            horizontalalignment='center',
+                            verticalalignment='bottom',
+                            fontsize=11,
+                            fontweight='bold')
+                
+                # Modify label sizes
+                for txt in ax.texts:
+                    text_content = txt.get_text()
+                    # Skip the special labels (E[f(X)], f(X), etc.)
+                    if all(x not in text_content for x in ["E[f(X)]", "f(X)", "other"]):
+                        txt.set_fontsize(10)
+
                 # --- Custom Aesthetics ---
                 # Title Format: "MLR (ALB)"
                 title_str = f"{model_name} ({gene_name})"
                 ax.set_title(title_str, 
                              color=MODEL_COLORS[model_name], 
-                             fontsize=24, 
+                             fontsize=13, 
                              fontweight='bold', 
                              pad=40) 
                 
                 # X-Label: Pushed down to clear E[f(x)]
                 ax.set_xlabel("SHAP Value (Impact)", 
-                              fontsize=20, 
+                              fontsize=10, 
                               fontweight='bold', 
-                              labelpad=30) 
+                              labelpad=20) 
                 
                 # Feature Names (Y-axis)
-                ax.tick_params(axis='y', labelsize=16) 
+                ax.tick_params(axis='y', labelsize=10) 
                 
                 # Boxed Spines (Matching your style)
                 for spine in ax.spines.values():
                     spine.set_visible(True)
                     spine.set_color('#333333')
-                    spine.set_linewidth(2.0) 
+                    spine.set_linewidth(1.2) 
                     
                 # Grid
                 ax.grid(True, which='major', axis='x', color='#EEEEEE', linestyle='-', linewidth=1.5)
@@ -176,7 +234,7 @@ class ShapAnalysisPipeline:
         # wspace=1.0: Full plot width gap between columns
         # hspace=1.2: 120% plot height gap between ALB and AFP rows
         plt.subplots_adjust(
-            wspace=1.0,  
+            wspace=1.2,  
             hspace=1.2,  
             left=0.08, right=0.95, top=0.92, bottom=0.08
         )
