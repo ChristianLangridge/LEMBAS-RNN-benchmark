@@ -207,7 +207,6 @@ marimo/_lsp/
 __marimo__/
 
 # Ignore all large local data, results, and output
-
 Zhang Lab Data/
 data/
 results/
@@ -222,3 +221,6 @@ results/
 .DS_StoreZhang Lab Code/Transcriptomics workshop/Index
 /Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Data
 /Users/christianlangridge/Desktop/Zhang-Lab/Zhang Lab Code/Transcriptomics workshop/Results
+
+# MAC-OS added files
+.DS_Store
