@@ -53,17 +53,16 @@ LEMBAS-RNN is made of separate modules:
 
 ## Results Summary 
 
-<u>All metrics cimputed on unseen validation set (262 samples, 16,100 target genes)<u>
+All metrics cimputed on unseen validation set (262 samples, 16,100 target genes)
 
 Aggregate Performance (Validation Set)
 
-| **Model** | **Flattened R²** | **Aggregate Pearson's R** | **RMSE** | **MAE** |
+| **Model** | **Flattened R²** | **Pearson's R** | **RMSE** | **MAE** |
 | --------- | ---------------- | ------------------------- | -------- | ------- |
 | MLR | 0.9528 | 0.9764 | 0.1261 | 0.0726 |
 | XGBRF | 0.9346 | 0.9669 | 0.1484 | 0.0884 |
 | LEMBAS-RNN | 0.8441 | 0.9246 | 0.2290 | 0.1576 |
 
-
-
+> **Note on R² methods:** `sklearn`'s `.score()` computes uniform-average R² across genes. The `compute_metrics()` function in this repo computes variance-weighted (flattened) R², which is substantially higher because the model performs disproportionately better on high-variance genes. Both are reported for transparency.
 
 
