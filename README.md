@@ -89,7 +89,9 @@ cd LEMBAS-RNN-benchmark
 conda env create -f lembasrnn_benchmark.yml 
 ```
 
-> **Note for GPU support:** install the appropriate `torch` build for your CUDA version from [pytorch.org](https://pytorch.org) *see lembasrnn_benchmark.yml for further dependecy specifications*
+> **Note for GPU support:** install the appropriate `torch` build for your CUDA version from [pytorch.org](https://pytorch.org)
+>
+>> *see lembasrnn_benchmark.yml for further dependecy specifications*
 
 
 ## Data Requirements 
