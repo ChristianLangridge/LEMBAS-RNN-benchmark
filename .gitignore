@@ -224,3 +224,6 @@ results/
 
 # MAC-OS added files
 .DS_Store
+
+# __pycache__
+__pycache__
