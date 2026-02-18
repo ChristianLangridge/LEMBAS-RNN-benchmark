@@ -1,4 +1,7 @@
 # LEMBAS-RNN benchmarking project
+[![License: BSD-3](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg?style=flat-square)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue?style=flat-square&logo=python)](https://www.python.org/)
+[![Data Requests](https://img.shields.io/badge/data_requests-christian.langridge%40kcl.ac.uk-informational?style=flat-square&logo=gmail)](https://github.com/ChristianLangridge)
 
 A benchmarking framework for evaluating a novel biologically-informed RNN architecture [LEMBAS-RNN](https://github.com/czhang0701/DLBionet) designed by Li *et al*, 2025 [UNPUBLISHED] against standard regression baseline models to predict target gene expression from transcription factor (TF) expression values in human liver tissue (bulk-RNA-seq)
 
@@ -66,47 +69,30 @@ Aggregate Performance (Validation Set)
 > **Note on R² methods:** `sklearn`'s `.score()` computes uniform-average R² across genes. The `compute_metrics()` function in this repo computes variance-weighted (flattened) R², which is substantially higher because the model model performance is heterogenous and disproportionately better on medium-variance genes.
 
 
-## Repository Structure
+## Installation 
 
-EMBAS-RNN-benchmark/
-│
-├── benchmarking/
-│   ├── data preprocessing/
-│   │   └── model_boilerplate_remote.py     # Shared data loading & train/test split
-│   │
-│   ├── model scripts/
-│   │   ├── LEMBAS-RNN/
-│   │   │   ├── RNN_reconstructor.py        # Core model classes (SignalingModel, BioNet,
-│   │   │   │                               #   ProjectInput, ProjectOutput)
-│   │   │   └── RNN_testing.ipynb           # Model loading, inference & diagnostics
-│   │   ├── MLR/
-│   │   │   └── MLR.ipynb                   # MLR training, evaluation & k-fold CV
-│   │   └── XGBRF/
-│   │       └── XGBRF.ipynb                 # Batched XGBRF training & evaluation
-│   │
-│   └── figures/
-│       ├── Model-fitting/
-│       │   └── Fig1(fitting).ipynb         # Observed vs predicted (training set)
-│       ├── Model-testing/
-│       │   └── Fig1.ipynb                  # Observed vs predicted (test set)
-│       ├── Model-validation/
-│       │   └── Fig1(validation).ipynb      # External validation cohort figures
-│       └── SHAP integration/
-│           └── Fig1(SHAP).ipynb            # SHAP waterfall plots across all models
-│
-├── config/
-│   ├── predictions/
-│   │   ├── model_load.py                   # Loads all three trained models + metrics helpers
-│   │   └── model_train_test_predictions.py # Generates predictions for all models
-│   ├── figures/
-│   │   └── figure1_agg_pearson_R.py        # Figure generation & publication styling
-│   └── SHAP/
-│       ├── SHAP_generation_baseline.py     # SHAP for MLR (Linear) & XGBRF (Tree)
-│       ├── SHAP_generation_RNN.py          # SHAP for RNN (GradientExplainer)
-│       └── SHAP_value_test_load_plot.py    # SHAP loading, validation & poster plotting
-│
-├── dep/                                    # External dependencies / submodules
-├── .vscode/                                # Editor settings
-├── .gitignore
-├── LICENSE                                 # BSD-3-Clause
-└── README.md
+**Prerequisites**
+
+- Python 3.12+
+- A CUDA-capable GPU is recommended for RNN training (CPU inference is supported)
+
+### 1. Clone the repository 
+
+```bash
+git clone https://github.com/ChristianLangridge/LEMBAS-RNN-benchmark.git
+cd LEMBAS-RNN-benchmark
+```
+
+### 2. Create and activate a conda environment using lembasrnn_benchmark.yml 
+
+```bash
+conda env create -f lembasrnn_benchmark.yml 
+```
+
+> **Note for GPU support:** install the appropriate `torch` build for your CUDA version from [pytorch.org](https://pytorch.org) *see lembasrnn_benchmark.yml for further dependecy specifications*
+
+
+## Data Requirements 
+
+This repository does **NOT** include the required data files (too large for version control). Can be delivered on request 
+
