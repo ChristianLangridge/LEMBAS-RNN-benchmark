@@ -29,38 +29,9 @@ This repository benchmarks LEMBAS-RNN against two standard baseline models - Mul
 
 ## Architecture Overview
 
-LEMBAS-RNN is made of three separate modules:
+LEMBAS-RNN is made of separate modules:
 
-TF Expression Input (1,197 features)
-        │
-        ▼
-┌─────────────────────────────────┐
-│  ProjectInput                   │
-│  Maps TF inputs onto the full   │
-│  network node space             │
-│  (learnable projection weights) │
-└─────────────────────────────────┘
-        │
-        ▼
-┌─────────────────────────────────────────────────────┐
-│  BioNet (core RNN)                                  │
-│  Iterative message-passing over the biological      │
-│  network topology (up to max_steps iterations)      │
-│  Activation: Michaelis-Menten-Like (MML)            │
-│  Convergence: steady-state detection via L∞ norm    │
-│  Network nodes: 16,371                              │
-└─────────────────────────────────────────────────────┘
-        │
-        ▼
-┌─────────────────────────────────┐
-│  ProjectOutput                  │
-│  Reads off the 16,100 target    │
-│  gene nodes from final          │
-│  network state                  │
-└─────────────────────────────────┘
-        │
-        ▼
-Predicted Gene Expression (16,100 targets)
+<img width="601" height="195" alt="image" src="https://github.com/user-attachments/assets/6feb6fc4-92d3-4d0f-9f3e-849a1f93eaba" />
 
 **Key Designs**
 
