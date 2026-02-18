@@ -7,22 +7,7 @@ A benchmarking framework for evaluating a novel biologically-informed RNN archit
 
 **Rotational project in Roger Williams Institute for Liver Studies at King's College London with Dr. Cheng Zhang**
 
-
-## Table of Contents
-
-[Jump to Background] ### - **Background**
-[Jump to Architecture Overview] ### - **Architecture Overview**
-[Jump to Models benchmarked] ### - **Models Benchmarked**
-[Jump to Results summary] ### **Results Summary**
-[Jump to Repository structure] ### **Repository Structure**
-[Jump to Installation] ### **Installation**
-[Jump to Data Requirements] ### **Data Requirements**
-[Jump to Usage] ### **Usage**
-[Jump to SHAP Explainability] ### **SHAP Explainability**
-[Jump to Known Issues & Limitations] ### **Known Issues & Limitations**
-[Jump to Contributing] ### **Contributing** 
-[Jump to License] ### **License**
-
+---
 
 ## Background
 
@@ -32,6 +17,7 @@ LEMBAS-RNN builds on this strategy: using a central RNN constrained by a real bi
 
 This repository benchmarks LEMBAS-RNN against two standard baseline models - Multiple Linear Regression (MLR) and XGBoost Random Forest Regression (XGBRF) - using a held-out test set and an independent external validation cohort of human liver bulk-RNA-seq data provided by [Yang H. *et al*, 2025](https://pubmed.ncbi.nlm.nih.gov/39889710/)
 
+---
 
 ## Architecture Overview
 
@@ -44,6 +30,7 @@ LEMBAS-RNN is made of separate modules:
 
 *Add here if desired*
 
+---
 
 ## Models Benchmarked
 
@@ -53,10 +40,11 @@ LEMBAS-RNN is made of separate modules:
 | XGBRF | XGBoost Random Forest Regressor | n_estimators=3, objective=reg:squarederror,random_state=888, trained in batches of 1,000 targets | 
 | LEMBAS-RNN | Biologically-informed RNN | target_steps=150, max_steps=10, exp_factor=50, leak=0.01, tolerance=1e-20 |
 
+---
 
 ## Results Summary 
 
-All metrics cimputed on unseen validation set (262 samples, 16,100 target genes)
+All metrics computed on unseen validation set (262 samples, 16,100 target genes)
 
 Aggregate Performance (Validation Set)
 
@@ -68,6 +56,7 @@ Aggregate Performance (Validation Set)
 
 > **Note on R² methods:** `sklearn`'s `.score()` computes uniform-average R² across genes. The `compute_metrics()` function in this repo computes variance-weighted (flattened) R², which is substantially higher because the model model performance is heterogenous and disproportionately better on medium-variance genes.
 
+---
 
 ## Installation 
 
@@ -93,8 +82,198 @@ conda env create -f lembasrnn_benchmark.yml
 >
 >> *see lembasrnn_benchmark.yml for further dependecy specifications*
 
+---
 
 ## Data Requirements 
 
-This repository does **NOT** include the required data files (too large for version control). Can be delivered on request 
+This repository does **NOT** include the required data files (too large for version control). Can be sent on request using using the email badge listed at the top of the file. 
+
+| File | Description | Expected Shape |
+|---|---|---|
+| `TF(full).tsv` | TF expression matrix (samples × TFs) | ~15,935 × 1,197 |
+| `Geneexpression (full).tsv` | Target gene expression (samples × genes) | ~15,935 × 16,100 |
+| `network(full).tsv` | Biological regulatory network (TF, Gene, Interaction) | ~1,153,904 × 3 |
+| `Liver_bulk_external.tsv` | External validation cohort | ~262 x 16,100 |
+
+
+### Setting Up Data Paths
+
+> ⚠️ **Current Limitation:** Data paths are currently hardcoded to the original development machine. Before running any scripts, you will need to update the paths in each script to point to your local copies of the data files. This is a known issue — a centralised `config/paths.py` with environment variable support is planned (see [Known Issues](#known-issues--limitations)).
+
+**Quick fix** — search for and replace all instances of the base path:
+
+```bash
+# Find all hardcoded path references
+grep -r "/home/christianl/Zhang-Lab" . --include="*.py" -l
+
+# Then update each file to point to your data directory
+```
+
+### Network File Format
+
+`network(full).tsv` must have exactly these three columns:
+
+```
+TF          Gene        Interaction
+TP53        CDKN1A      1
+MYC         CDK4        1
+BRCA1       PTEN        -1
+...
+```
+
+`Interaction` must be numeric (`1` = activation, `-1` = inhibition).
+
+---
+
+## Usage
+
+### 1. Data Preprocessing
+
+All models share the same preprocessing boilerplate. Run this first to generate `x_train`, `x_test`, `y_train`, `y_test`:
+
+```python
+%run 'benchmarking/data preprocessing/model_boilerplate_remote.py'
+```
+
+This script:
+- Loads TF and gene expression data
+- Filters TFs to those present in the biological network (ensures all models use identical features)
+- Applies an 80/20 train/test split with `random_state=888`
+
+### 2. Training the Baseline Models
+
+**MLR:**
+```bash
+jupyter notebook "benchmarking/model scripts/MLR/MLR.ipynb"
+```
+
+**XGBRF** (trains 16,100 targets in batches of 1,000 — expect ~20–60 min on a multi-core machine):
+```bash
+jupyter notebook "benchmarking/model scripts/XGBRF/XGBRF.ipynb"
+```
+
+### 3. Loading and Testing the RNN
+
+The RNN is loaded from a saved checkpoint using `load_model_from_checkpoint()`:
+
+```python
+from benchmarking.model_scripts.LEMBAS_RNN.RNN_reconstructor import load_model_from_checkpoint
+
+model = load_model_from_checkpoint(
+    checkpoint_path='path/to/signaling_model.v1.pt',
+    net_path='path/to/network(full).tsv',
+    X_in_df=x_test_df,
+    y_out_df=y_test_df,
+    device='cpu',
+    use_exact_training_params=True
+)
+```
+
+Full inference walkthrough is in `benchmarking/model scripts/LEMBAS-RNN/RNN_testing.ipynb`.
+
+### 4. Generating Benchmark Figures
+
+```bash
+# Training set fit (Fig 1A/B)
+jupyter notebook "benchmarking/figures/Model-fitting/Fig1(fitting).ipynb"
+
+# Test set performance (Fig 2A)
+jupyter notebook "benchmarking/figures/Model-testing/Fig1.ipynb"
+
+# External validation (Fig 3A)
+jupyter notebook "benchmarking/figures/Model-validation/Fig1(validation).ipynb"
+```
+
+### 5. Generating Predictions Programmatically
+
+```bash
+python config/predictions/model_train_test_predictions.py
+```
+
+This script loads all three trained models and saves prediction arrays for downstream analysis.
+
+---
+
+## SHAP Interpretability
+
+SHAP (SHapley Additive exPlanations) analysis is computed for two clinically relevant liver genes — **ALB** (Albumin) and **AFP** (Alpha-fetoprotein) — across all three models using the external validation cohort.
+
+| Model | SHAP Method | Notes |
+|---|---|---|
+| MLR | `LinearExplainer` | Exact, fast |
+| XGBRF | `TreeExplainer` | Exact, fast |
+| RNN | `GradientExplainer` | Approximate; `n_samples=25`, `background=50` for feasibility |
+
+### Running SHAP Analysis
+
+```bash
+# Baseline models (MLR + XGBRF)
+python config/SHAP/SHAP_generation_baseline.py
+
+# RNN (slow — optimised for feasibility with reduced sample counts)
+python config/SHAP/SHAP_generation_RNN.py
+
+# Load, validate, and plot saved SHAP values
+python config/SHAP/SHAP_value_test_load_plot.py
+```
+
+SHAP outputs are saved as `.npz` files containing per-gene SHAP arrays, expected values, and feature names. Waterfall plots are generated for each model × gene combination in a publication-quality 2×3 grid.
+
+---
+
+## Known Issues & Limitations
+
+### ⚠️ Hardcoded Absolute Paths
+All scripts currently use absolute paths specific to the original development machine (`/home/christianl/Zhang-Lab/...`). A centralised `config/paths.py` with environment variable support is the planned fix. Until then, you must manually update paths before running any script.
+
+### ⚠️ Feature Count Mismatch (1196 vs 1197 TFs)
+The saved RNN checkpoint was trained on 1,197 TF features. The current `network(full).tsv` produces an intersection of 1,196 usable TFs. Loading the checkpoint against the current network will raise:
+
+```
+RuntimeError: size mismatch for input_layer.weights
+```
+
+**Workaround:** Either retrain the RNN on 1,196 features (recommended for reproducibility), or reconstruct the original network file that produced 1,197 features. See `RNN_testing.ipynb` Step 6 for a full diagnostic.
+
+### ⚠️ No Automated Test Suite
+There is currently no `tests/` directory or CI pipeline. Unit and integration tests are planned.
+
+### RNN SHAP is Slow
+GradientExplainer on the full RNN is computationally expensive due to the iterative steady-state forward pass. Background samples have been aggressively reduced (`n_background=50`, `n_test=262`, `n_samples=25`). Expect ~30–60 minutes per gene on CPU.
+
+---
+
+## Contributing
+
+This is an active research project. If you'd like to contribute:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Commit your changes (`git commit -m 'Add: your feature'`)
+4. Push and open a Pull Request
+
+Please ensure any new scripts avoid hardcoded paths and include basic inline documentation.
+
+---
+
+## Citation
+
+If you use this codebase or the LEMBAS-RNN architecture in your work, please cite:
+
+```
+Langridge, C. (2025–2026). LEMBAS-RNN Benchmarking Project.
+Rotational project, King's College London, Zhang Lab.
+https://github.com/ChristianLangridge/LEMBAS-RNN-benchmark
+```
+
+---
+
+## License
+
+This project is licensed under the BSD-3-Clause License. See [LICENSE](LICENSE) for details.
+
+---
+
+*Developed as part of a rotational PhD project at King's College London in collaboration with Dr. Cheng Zhang.*
+
 
