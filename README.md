@@ -1,6 +1,6 @@
 # LEMBAS-RNN benchmarking project
 
-A benchmarking framework for evaluating a novel biologically-informed RNN architecture against standard regression baseline models to predict target gene expression from transcription factor (TF) expression values in human liver tissue (bulk-RNA-seq)
+A benchmarking framework for evaluating a novel biologically-informed RNN architecture [LEMBAS-RNN](https://github.com/czhang0701/DLBionet) designed by Li *et al*, against standard regression baseline models to predict target gene expression from transcription factor (TF) expression values in human liver tissue (bulk-RNA-seq)
 
 **Rotational project in Roger Williams Institute for Liver Studies at King's College London with Dr. Cheng Zhang**
 
