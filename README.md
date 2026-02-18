@@ -9,6 +9,23 @@ A benchmarking framework for evaluating a novel biologically-informed RNN archit
 
 ---
 
+# Table of Contents
+
+- [Background](#background)
+- [Architecture Overview](#architecture-overview)
+- [Models Benchmarked](#models-benchmarked)
+- [Results Summary](#results-summary)
+- [Repository Structure](#repository-structure)
+- [Installation](#installation)
+- [Data Requirements](#data-requirements)
+- [Usage](#usage)
+- [SHAP Interpretability](#shap-interpretability)
+- [Known Issues & Limitations](#known-issues--limitations)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
 ## Background
 
 Gene expression prediction is a central interest in Systems Biology. Transcription factors (TFs) regulate the expression of target genes through a complex biological signalling network. Classical machine learning approaches (linear regression, tree-based models) treat this task as a black-box tabular problem and do not take into account for previously validated network topology. 
