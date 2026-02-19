@@ -30,7 +30,7 @@ A benchmarking framework for evaluating a novel biologically-informed RNN archit
 
 Gene expression prediction is a central interest in Systems Biology. Transcription factors (TFs) regulate the expression of target genes through a complex biological signalling network. Classical machine learning approaches (linear regression, tree-based models) treat this task as a black-box tabular problem and do not take into account for previously validated network topology. 
 
-LEMBAS-RNN builds on this strategy: using a central RNN constrained by a real biological signalling network represented in latent space `network.tsv`, embedding known TF-target regulatory interactions directly for model training using Michaelis-Menten-like (MML) activtion functions. This produces a model that is both biologically-informed and compatible with post-hoc explainability techniques like [SHAP analysis](https://github.com/shap/shap). 
+LEMBAS-RNN builds on this strategy: using a central RNN constrained by a real biological signalling network represented in latent space `network.tsv`, embedding known TF-target regulatory interactions directly for model training using Michaelis-Menten-like (MML) activation functions. This produces a model that is both biologically-informed and compatible with post-hoc explainability techniques like [SHAP analysis](https://github.com/shap/shap). 
 
 This repository benchmarks LEMBAS-RNN against two standard baseline models - Multiple Linear Regression (MLR) and XGBoost Random Forest Regression (XGBRF) - using a held-out test set and an independent external validation cohort of human liver bulk-RNA-seq data provided by [Yang H. *et al*, 2025](https://pubmed.ncbi.nlm.nih.gov/39889710/)
 
