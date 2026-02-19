@@ -243,14 +243,14 @@ SHAP outputs are saved as `.npz` files containing per-gene SHAP arrays, expected
 ### ⚠️ Hardcoded Absolute Paths
 All scripts currently use absolute paths specific to the original development machine (`/home/christianl/Zhang-Lab/...`). A centralised `config/paths.py` with environment variable support is the planned fix. Until then, you must manually update paths before running any script.
 
-### ⚠️ Feature Count Mismatch (1196 vs 1197 TFs)
-The saved RNN checkpoint was trained on 1,197 TF features. The current `network(full).tsv` produces an intersection of 1,196 usable TFs. Loading the checkpoint against the current network will raise:
+### ⚠️ Feature Count Importance (1197 TFs and 16,100 target genes)
+The saved RNN checkpoint was trained on 1,197 TF features and 16,100 target genes and the `network(full).tsv` file is alligned with that. . Loading the checkpoint against a different network file or with different input dimensions will raise:
 
 ```
 RuntimeError: size mismatch for input_layer.weights
 ```
 
-**Workaround:** Either retrain the RNN on 1,196 features (recommended for reproducibility), or reconstruct the original network file that produced 1,197 features. See `RNN_testing.ipynb` Step 6 for a full diagnostic.
+**Workaround:** Either retrain the RNN on new number of features (recommended for reproducibility) using a new, aligned network file, or filter only inputs that match `network(full).tsv` and fill missing feature columnns with zero values. See `RNN_testing.ipynb` Step 6 for a full diagnostic.
 
 ### ⚠️ No Automated Test Suite
 There is currently no `tests/` directory or CI pipeline. Unit and integration tests are planned.
