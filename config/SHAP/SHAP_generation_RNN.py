@@ -23,7 +23,7 @@ from tqdm import tqdm
 import warnings
 warnings.filterwarnings('ignore')
 
-sys.path.append('/home/christianl/Zhang-Lab/Zhang Lab Code/Tuning/uncentered_RNN_tuning')
+sys.path.append('/home/christianl/Zhang-Lab/benchmarking/model scripts/LEMBAS-RNN')
 from RNN_reconstructor import load_model_from_checkpoint
 
 # ============================================================================
@@ -122,16 +122,6 @@ rnn_model = rnn_model.to(device)
 rnn_model.eval()
 
 print(f"✓ RNN loaded on {device.upper()}")
-
-
-
-
-
-
-
-# ... [Load RNN Section] ...
-
-# ... [After loading RNN] ...
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 rnn_model = rnn_model.to(device)
