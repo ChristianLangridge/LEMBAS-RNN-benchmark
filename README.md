@@ -244,7 +244,7 @@ SHAP outputs are saved as `.npz` files containing per-gene SHAP arrays, expected
 All scripts currently use absolute paths specific to the original development machine (`/home/christianl/Zhang-Lab/...`). A centralised `config/paths.py` with environment variable support is the planned fix. Until then, you must manually update paths before running any script.
 
 ### ⚠️ Feature Count Importance (1197 TFs and 16,100 target genes)
-The saved RNN checkpoint was trained on 1,197 TF features and 16,100 target genes and the `network(full).tsv` file is alligned with that. . Loading the checkpoint against a different network file or with different input dimensions will raise:
+The saved RNN checkpoint was trained on 1,197 TF features and 16,100 target genes and the `network(full).tsv` file is alligned with that. Loading the checkpoint against a different network file or with different input dimensions will raise:
 
 ```
 RuntimeError: size mismatch for input_layer.weights
