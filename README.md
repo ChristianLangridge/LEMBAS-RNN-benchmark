@@ -256,7 +256,10 @@ RuntimeError: size mismatch for input_layer.weights
 There is currently no `tests/` directory or CI pipeline. Unit and integration tests are planned.
 
 ### RNN SHAP is Slow
-GradientExplainer on the full RNN is computationally expensive due to the iterative steady-state forward pass. Background samples have been aggressively reduced (`n_background=50`, `n_test=262`, `n_samples=25`). Expect ~30–60 minutes per gene on CPU.
+GradientExplainer on the full RNN is computationally expensive due to the iterative steady-state forward pass. With 2 x NVIDIA GeForce RTX-5080, runtime for all 262 samples was around 4 minutes. This is will be much slower CPU. 
+
+**Workaround:** Lower the number of `RNN_BACKGROUND_SAMPLES`, `RNN_TEST_SAMPLES` and `RNN_N_SAMPLES` will make computational overhead less important for use on CPU. 
+
 
 ---
 
