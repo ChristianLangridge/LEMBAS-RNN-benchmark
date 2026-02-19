@@ -63,7 +63,7 @@ LEMBAS-RNN is made of separate modules:
 
 All metrics computed on unseen validation set (262 samples, 16,100 target genes)
 
-<u>Aggregate Performance (Validation Set)<u>
+<u>Aggregate Performance (Validation Set)</u>
 
 | **Model** | **Flattened R²** | **Pearson's R** | **RMSE** | **MAE** |
 | --------- | ---------------- | ------------------------- | -------- | ------- |
