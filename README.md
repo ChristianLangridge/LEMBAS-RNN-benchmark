@@ -32,7 +32,7 @@ Gene expression prediction is a central interest in Systems Biology. Transcripti
 
 LEMBAS-RNN builds on this strategy: using a central RNN constrained by a real biological signalling network represented in latent space `network.tsv`, embedding known TF-target regulatory interactions directly for model training using Michaelis-Menten-like (MML) activation functions. This produces a model that is both biologically-informed and compatible with post-hoc explainability techniques like [SHAP analysis](https://github.com/shap/shap). 
 
-This repository benchmarks LEMBAS-RNN against two standard baseline models - Multiple Linear Regression (MLR) and XGBoost Random Forest Regression (XGBRF) - using a held-out test set and an independent external validation cohort of human liver bulk-RNA-seq data provided by [Yang H. *et al*, 2025](https://pubmed.ncbi.nlm.nih.gov/39889710/)
+This repository benchmarks LEMBAS-RNN against two standard baseline models - Multiple Linear Regression (MLR) and XGBoost Random Forest Regression (XGBRF) - using a held-out test set and an independent external validation cohort of human liver bulk-RNA-seq data provided by [Yang H. *et al*, 2025](https://pubmed.ncbi.nlm.nih.gov/39889710/).
 
 ---
 
