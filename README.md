@@ -55,7 +55,7 @@ LEMBAS-RNN is made of separate modules:
 | --------- | -------- | -------------------------- |
 | MLR | Multiple Linear Regressor | n_jobs=-1, sklearn LinearRegression() |
 | XGBRF | XGBoost Random Forest Regressor | n_estimators=3, objective=reg:squarederror,random_state=888, trained in batches of 1,000 targets | 
-| LEMBAS-RNN | Biologically-informed RNN | target_steps=150, max_steps=10, exp_factor=50, leak=0.01, tolerance=1e-20 |
+| **LEMBAS-RNN** | **Biologically-informed RNN** | **target_steps=150, max_steps=10, exp_factor=50, leak=0.01, tolerance=1e-20** |
 
 ---
 
