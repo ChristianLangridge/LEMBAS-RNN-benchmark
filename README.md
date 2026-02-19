@@ -75,6 +75,30 @@ All metrics computed on unseen validation set (262 samples, 16,100 target genes)
 
 ---
 
+## Repository Structure
+
+### config
+
+All scripts related to configuration on local machine for model predictions, figure generation, latency testing and SHAP integration.
+
+### dep
+
+Includes .yml file with all dependencies used on development machine. 
+
+### doc 
+
+Includes all documentation relevant to the design of LEMBAS-RNN (Li *et al*, 2025) and the benchmarking framework (my rotational report, 2026).
+
+### run
+
+All scripts related to the running of the benchmarking framework for data preprocessing, model training/initialisation and figure generation.
+
+### test
+
+Includes all unit/integration testing so far. More are planned.
+
+---
+
 ## Installation 
 
 **Prerequisites**
