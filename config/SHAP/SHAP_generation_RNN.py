@@ -32,8 +32,8 @@ from RNN_reconstructor import load_model_from_checkpoint
 
 GENES_OF_INTEREST = ['ALB', 'AFP']
 
-OUTPUT_BASE_PATH = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved SHAP values/gene_specific'
-MODELS_BASE_PATH = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models'
+OUTPUT_BASE_PATH = f"{DATA_ROOT}/Saved SHAP values/gene_specific'
+MODELS_BASE_PATH = f"{DATA_ROOT}/Saved models'
 DATA_BASE_PATH = '/home/christianl/Zhang-Lab/Zhang Lab Data'
 
 # CRITICAL: Aggressively reduced for feasibility

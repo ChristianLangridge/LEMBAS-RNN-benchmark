@@ -17,14 +17,14 @@ print("="*70)
 # ============================================================================
 
 print("\n[1/6] Loading external liver bulk validation data...")
-validation_dataset = pd.read_csv('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/Liver_bulk_external.tsv', 
+validation_dataset = pd.read_csv(f"{DATA_ROOT}/Full data files/Liver_bulk_external.tsv', 
                                  sep='\t', header=0, index_col=0)
 
 print(f"   External data shape: {validation_dataset.shape}")
 
 print("\n[2/6] Generating x_validation (TF features)...")
 # Load network to identify usable TF features
-net = pd.read_csv('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/network(full).tsv', sep='\t')
+net = pd.read_csv(f"{DATA_ROOT}/Full data files/network(full).tsv', sep='\t')
 network_tfs = set(net['TF'].unique())
 network_genes = set(net['Gene'].unique())
 network_nodes = network_tfs | network_genes
@@ -99,21 +99,21 @@ print(f"   y_validation shape: {y_validation.shape}")
 # ============================================================================
 
 print("\n[4/6] Loading MLR model and generating predictions...")
-mlr_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/MLR/MLR_v3/MLR_model_v4(uncentered[FINAL]).joblib'
+mlr_model_path = f"{DATA_ROOT}/Saved models/MLR/MLR_v3/MLR_model_v4(uncentered[FINAL]).joblib'
 mlr_loaded = joblib.load(mlr_model_path)
 mlr_y_pred_val = mlr_loaded.predict(x_validation)
 print(f"   MLR predictions shape: {mlr_y_pred_val.shape}")
 
 print("\n[5/6] Loading XGBRF models and generating predictions...")
-xgbrf_model_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/XGBRF/XGBRF_v5/all_models_batch_XGBRF[uncentered_REALFINAL].joblib'
+xgbrf_model_path = f"{DATA_ROOT}/Saved models/XGBRF/XGBRF_v5/all_models_batch_XGBRF[uncentered_REALFINAL].joblib'
 xgbrf_loaded = joblib.load(xgbrf_model_path)
 xgbrf_y_pred_val = np.column_stack([model.predict(x_validation) for model in xgbrf_loaded])
 print(f"   XGBRF predictions shape: {xgbrf_y_pred_val.shape}")
 
 print("\n[6/6] Loading RNN model and generating predictions...")
 RNN_val = load_model_from_checkpoint(
-    checkpoint_path='/home/christianl/Zhang-Lab/Zhang Lab Data/Saved models/RNN/uncentered_data_RNN/signaling_model.v1.pt',
-    net_path='/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/network(full).tsv',
+    checkpoint_path=f"{DATA_ROOT}/Saved models/RNN/uncentered_data_RNN/signaling_model.v1.pt',
+    net_path=f"{DATA_ROOT}/Full data files/network(full).tsv',
     X_in_df=pd.DataFrame(x_validation),
     y_out_df=pd.DataFrame(y_validation),
     device='cpu',
@@ -129,7 +129,7 @@ print(f"   RNN predictions shape: {rnn_y_pred_val.shape}")
 # Save y_validation and predictions to npz file
 # ============================================================================
 
-output_path = '/home/christianl/Zhang-Lab/Zhang Lab Data/Saved predictions/model_predictions_validation_v1.npz'
+output_path = f"{DATA_ROOT}/Saved predictions/model_predictions_validation_v1.npz'
 
 print(f"\n{'='*70}")
 print("Saving y_validation and model predictions...")

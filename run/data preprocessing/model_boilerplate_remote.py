@@ -18,7 +18,7 @@ gene_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/Genee
 tf_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0, index_col=0)
 
 # Making sure only TFs that are in the network are also in the expression data 
-net = pd.read_csv('/home/christianl/Zhang-Lab/Zhang Lab Data/Full data files/network(full).tsv', sep='\t')
+net = pd.read_csv(f"{DATA_ROOT}/Full data files/network(full).tsv', sep='\t')
 network_tfs = set(net['TF'].unique())      # TFs
 network_genes = set(net['Gene'].unique())  # target genes
 network_nodes = network_tfs | network_genes  # all nodes in the network.tsv
