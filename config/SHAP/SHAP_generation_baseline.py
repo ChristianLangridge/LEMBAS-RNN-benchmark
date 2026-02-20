@@ -38,7 +38,6 @@ GENES_OF_INTEREST = ['ALB', 'AFP']
 
 OUTPUT_BASE_PATH = f"{DATA_ROOT}/Saved SHAP values/gene_specific"
 MODELS_BASE_PATH = f"{DATA_ROOT}/Saved models"
-DATA_BASE_PATH = DATA_ROOT
 
 os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
 
@@ -90,16 +89,16 @@ def extract_xgbrf_model_from_batches(batch_models, gene_idx, batch_size=1000):
 
 print_section("STEP 1: Loading Validation Data")
 
-validation_dataset = pd.read_csv(f'{DATA_BASE_PATH}/Full data files/Liver_bulk_external.tsv', 
+validation_dataset = pd.read_csv(f'{DATA_ROOT}/Full data files/Liver_bulk_external.tsv', 
                                  sep='\t', header=0, index_col=0)
 
 # Generate x_validation (TF features)
-net = pd.read_csv(f'{DATA_BASE_PATH}/Full data files/network(full).tsv', sep='\t')
+net = pd.read_csv(f'{DATA_ROOT}/Full data files/network(full).tsv', sep='\t')
 network_tfs = set(net['TF'].unique())
 network_genes = set(net['Gene'].unique())
 network_nodes = network_tfs | network_genes
 
-tf_expression = pd.read_csv(f'{DATA_BASE_PATH}/Full data files/TF(full).tsv', 
+tf_expression = pd.read_csv(f'{DATA_ROOT}/Full data files/TF(full).tsv', 
                             sep='\t', header=0, index_col=0)
 
 usable_features = [tf for tf in tf_expression.columns if tf in network_nodes]
@@ -114,7 +113,7 @@ for feature in missing_features:
 x_validation = x_validation[usable_features]
 
 # Generate y_validation (Gene expression features)
-gene_expression_ref = pd.read_csv(f"{DATA_BASE_PATH}/Full data files/Geneexpression (full).tsv", 
+gene_expression_ref = pd.read_csv(f"{DATA_ROOT}/Full data files/Geneexpression (full).tsv", 
                                   sep="\t", header=0, index_col=0)
 expected_features = gene_expression_ref.columns.tolist()
 new_input = validation_dataset.copy()
@@ -227,7 +226,7 @@ if ENABLE_RNN:
     
     rnn_model = load_model_from_checkpoint(
         checkpoint_path=f'{MODELS_BASE_PATH}/RNN/uncentered_data_RNN/signaling_model.v1.pt',
-        net_path=f'{DATA_BASE_PATH}/Full data files/network(full).tsv',
+        net_path=f'{DATA_ROOT}/Full data files/network(full).tsv',
         X_in_df=pd.DataFrame(x_validation),
         y_out_df=pd.DataFrame(y_validation),
         device='cpu',
