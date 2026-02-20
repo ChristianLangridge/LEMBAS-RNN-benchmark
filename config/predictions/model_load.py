@@ -46,11 +46,10 @@ def set_publication_style():
 # ============================================================================
 
 print("Loading pre-computed predictions...")
-data_path = f"{DATA_ROOT}/Saved predictions/model_predictions_uncentered_v1.npz'
+data_path = f"{DATA_ROOT}/Saved predictions/model_predictions_uncentered_v1.npz"
 data = np.load(data_path, allow_pickle=True)
 
-data_path_external = f"{DATA_ROOT}/Saved predictions/model_predictions_validation_v1.npz'
-data_external = np.load(data_path_external, allow_pickle=True)
+data_path_external = f"{DATA_ROOT}/Saved predictions/model_predictions_validation_v1.npz"
 
 # Reconstruct training data
 y_train = pd.DataFrame(

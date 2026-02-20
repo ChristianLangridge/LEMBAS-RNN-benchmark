@@ -6,18 +6,18 @@ from sklearn.model_selection import train_test_split
 import sys
 import os
 
-sys.path.append('/home/christianl/Zhang-Lab/Zhang Lab Code/Tuning/uncentered_RNN_tuning')
+sys.path.append(f"{REPO_ROOT}/config/SHAP/")
 from RNN_reconstructor import load_model_from_checkpoint
 
 print("Loading data...")
 # Load data
-gene_expression = pd.read_csv('~/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv', 
+gene_expression = pd.read_csv(f"{DATA_ROOT}/Full data files/Geneexpression (full).tsv", 
                               sep='\t', header=0, index_col=0)
-tf_expression = pd.read_csv('~/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv', 
+tf_expression = pd.read_csv(f"{DATA_ROOT}/Full data files/TF(full).tsv", 
                             sep='\t', header=0, index_col=0)
 
 # Filter TFs
-net = pd.read_csv(f"{DATA_ROOT}/Full data files/network(full).tsv', sep='\t')
+net = pd.read_csv(f"{DATA_ROOT}/Full data files/network(full).tsv", sep='\t')
 network_tfs = set(net['TF'].unique())
 network_genes = set(net['Gene'].unique())
 network_nodes = network_tfs | network_genes
@@ -37,14 +37,14 @@ print(f"Data shapes: x_train {x_train.shape}, y_train {y_train.shape}")
 # ============================================================================
 
 print("\nLoading MLR model...")
-mlr_model_path = f"{DATA_ROOT}/Saved models/MLR/MLR_v3/MLR_model_v4(uncentered[FINAL]).joblib'
+mlr_model_path = f"{DATA_ROOT}/Saved models/MLR/MLR_v3/MLR_model_v4(uncentered[FINAL]).joblib"
 mlr_loaded = joblib.load(mlr_model_path)
 mlr_y_pred_train = mlr_loaded.predict(x_train)
 mlr_y_pred_test = mlr_loaded.predict(x_test)
 print(f"MLR predictions: {mlr_y_pred_train.shape}")
 
 print("\nLoading XGBRF models...")
-xgbrf_model_path = f"{DATA_ROOT}/Saved models/XGBRF/XGBRF_v5/all_models_batch_XGBRF[uncentered_REALFINAL].joblib'
+xgbrf_model_path = f"{DATA_ROOT}/Saved models/XGBRF/XGBRF_v5/all_models_batch_XGBRF[uncentered_REALFINAL].joblib"
 xgbrf_loaded = joblib.load(xgbrf_model_path)
 xgbrf_y_pred_train = np.column_stack([model.predict(x_train) for model in xgbrf_loaded])
 xgbrf_y_pred_test = np.column_stack([model.predict(x_test) for model in xgbrf_loaded])
@@ -52,8 +52,8 @@ print(f"XGBRF predictions: {xgbrf_y_pred_train.shape}")
 
 print("\nLoading RNN model...")
 RNN_loaded = load_model_from_checkpoint(
-    checkpoint_path=f"{DATA_ROOT}/Saved models/RNN/uncentered_data_RNN/signaling_model.v1.pt',
-    net_path=f"{DATA_ROOT}/Full data files/network(full).tsv',
+    checkpoint_path=f"{DATA_ROOT}/Saved models/RNN/uncentered_data_RNN/signaling_model.v1.pt",
+    net_path=f"{DATA_ROOT}/Full data files/network(full).tsv",
     X_in_df=pd.DataFrame(x_train),
     y_out_df=pd.DataFrame(y_train),
     device='cpu',
@@ -65,8 +65,8 @@ with torch.no_grad():
 
 # Generate test predictions
 RNN_test = load_model_from_checkpoint(
-    checkpoint_path=f"{DATA_ROOT}/Saved models/RNN/uncentered_data_RNN/signaling_model.v1.pt',
-    net_path=f"{DATA_ROOT}/Full data files/network(full).tsv',
+    checkpoint_path=f"{DATA_ROOT}/Saved models/RNN/uncentered_data_RNN/signaling_model.v1.pt",
+    net_path=f"{DATA_ROOT}/Full data files/network(full).tsv",
     X_in_df=pd.DataFrame(x_test),
     y_out_df=pd.DataFrame(y_test),
     device='cpu',
@@ -82,7 +82,7 @@ print(f"RNN predictions: {rnn_y_pred_train.shape}")
 # Save everything
 # ============================================================================
 
-output_path = f"{DATA_ROOT}/Saved predictions/model_predictions_uncentered_v1.npz'
+output_path = f"{DATA_ROOT}/Saved predictions/model_predictions_uncentered_v1.npz"
 
 print(f"\nSaving predictions to: {output_path}")
 np.savez_compressed(

@@ -14,11 +14,11 @@ import optuna
 import glob
 
 # Reading in full data files
-gene_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/Geneexpression (full).tsv'), sep='\t', header=0, index_col=0)
-tf_expression = pd.read_csv(('~/Zhang-Lab/Zhang Lab Data/Full data files/TF(full).tsv'), sep='\t', header=0, index_col=0)
+gene_expression = pd.read_csv((f"{DATA_ROOT}/Full data files/Geneexpression (full).tsv"), sep='\t', header=0, index_col=0)
+tf_expression = pd.read_csv((f"{DATA_ROOT}/Full data files/TF(full).tsv"), sep='\t', header=0, index_col=0)
 
 # Making sure only TFs that are in the network are also in the expression data 
-net = pd.read_csv(f"{DATA_ROOT}/Full data files/network(full).tsv', sep='\t')
+net = pd.read_csv(f"{DATA_ROOT}/Full data files/network(full).tsv", sep='\t')
 network_tfs = set(net['TF'].unique())      # TFs
 network_genes = set(net['Gene'].unique())  # target genes
 network_nodes = network_tfs | network_genes  # all nodes in the network.tsv
@@ -30,12 +30,6 @@ y = gene_expression
 # 80% train and 20% test
 x_train, x_test, y_train, y_test = train_test_split(
     x, y, test_size=0.2, random_state=888) # changed from 42 to 888 to match training seed for RNN 13/01/26
-
-#x_train.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/training/x_train(Christian).csv", sep='\t', encoding='utf-8', index=True)
-#y_train.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/training/y_train(Christian).csv", sep='\t', encoding='utf-8', index=True)
-
-#x_test.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/testing/x_test(Christian).csv", sep='\t', encoding='utf-8', index=True)
-#y_test.to_csv("/home/christianl/Zhang-Lab/Zhang Lab Data/Data for Cheng RNN retraining/testing/y_test(Christian).csv", sep='\t', encoding='utf-8', index=True)
 
 # For training set
 x_train = x_train.to_numpy()

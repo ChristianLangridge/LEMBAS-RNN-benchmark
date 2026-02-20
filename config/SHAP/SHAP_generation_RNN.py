@@ -23,7 +23,7 @@ from tqdm import tqdm
 import warnings
 warnings.filterwarnings('ignore')
 
-sys.path.append('/home/christianl/Zhang-Lab/benchmarking/model scripts/LEMBAS-RNN')
+sys.path.append(f"{REPO_ROOT}/config/SHAP/")
 from RNN_reconstructor import load_model_from_checkpoint
 
 # ============================================================================
@@ -32,9 +32,9 @@ from RNN_reconstructor import load_model_from_checkpoint
 
 GENES_OF_INTEREST = ['ALB', 'AFP']
 
-OUTPUT_BASE_PATH = f"{DATA_ROOT}/Saved SHAP values/gene_specific'
-MODELS_BASE_PATH = f"{DATA_ROOT}/Saved models'
-DATA_BASE_PATH = '/home/christianl/Zhang-Lab/Zhang Lab Data'
+OUTPUT_BASE_PATH = f"{DATA_ROOT}/Saved SHAP values/gene_specific"
+MODELS_BASE_PATH = f"{DATA_ROOT}/Saved models"
+DATA_BASE_PATH = DATA_ROOT
 
 # CRITICAL: Aggressively reduced for feasibility
 RNN_BACKGROUND_SAMPLES = 50   # Was 5 - integrated gradients scale with this!
