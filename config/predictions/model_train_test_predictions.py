@@ -5,6 +5,22 @@ import joblib
 from sklearn.model_selection import train_test_split
 import sys
 import os
+import json
+from pathlib import Path
+
+# Resolve REPO_ROOT and DATA_ROOT
+# Works whether the script is run directly (python script.py) 
+# or via %run from a notebook
+if 'REPO_ROOT' not in dir():
+    _root = next(p for p in Path(__file__).resolve().parents if (p / "README.md").exists())
+    REPO_ROOT = str(_root)
+
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+if 'DATA_ROOT' not in dir():
+    with open(Path(REPO_ROOT) / "data_config.json", "r") as f:
+        DATA_ROOT = json.load(f)["DATA_ROOT"]
 
 sys.path.append(f"{REPO_ROOT}/config/SHAP/")
 from RNN_reconstructor import load_model_from_checkpoint
