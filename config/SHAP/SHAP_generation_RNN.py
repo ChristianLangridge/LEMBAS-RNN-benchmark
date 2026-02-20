@@ -40,7 +40,7 @@ if 'DATA_ROOT' not in dir():
     with open(Path(REPO_ROOT) / "data_config.json", "r") as f:
         DATA_ROOT = json.load(f)["DATA_ROOT"]
 
-sys.path.append(f"{REPO_ROOT}/config/SHAP/")
+sys.path.insert(0, f"{REPO_ROOT}/config/SHAP/")
 from RNN_reconstructor import load_model_from_checkpoint
 
 # ============================================================================
@@ -51,7 +51,6 @@ GENES_OF_INTEREST = ['ALB', 'AFP']
 
 OUTPUT_BASE_PATH = f"{DATA_ROOT}/Saved SHAP values/gene_specific"
 MODELS_BASE_PATH = f"{DATA_ROOT}/Saved models"
-DATA_BASE_PATH = DATA_ROOT
 
 # CRITICAL: Aggressively reduced for feasibility
 RNN_BACKGROUND_SAMPLES = 50   # Was 5 - integrated gradients scale with this!
@@ -68,15 +67,15 @@ print("="*80)
 print("Loading Validation Data")
 print("="*80)
 
-validation_dataset = pd.read_csv(f'{DATA_BASE_PATH}/Full data files/Liver_bulk_external.tsv', 
+validation_dataset = pd.read_csv(f'{DATA_ROOT}/Full data files/Liver_bulk_external.tsv', 
                                  sep='\t', header=0, index_col=0)
 
-net = pd.read_csv(f'{DATA_BASE_PATH}/Full data files/network(full).tsv', sep='\t')
+net = pd.read_csv(f'{DATA_ROOT}/Full data files/network(full).tsv', sep='\t')
 network_tfs = set(net['TF'].unique())
 network_genes = set(net['Gene'].unique())
 network_nodes = network_tfs | network_genes
 
-tf_expression = pd.read_csv(f'{DATA_BASE_PATH}/Full data files/TF(full).tsv', 
+tf_expression = pd.read_csv(f'{DATA_ROOT}/Full data files/TF(full).tsv', 
                             sep='\t', header=0, index_col=0)
 
 usable_features = [tf for tf in tf_expression.columns if tf in network_nodes]
@@ -90,7 +89,7 @@ for feature in missing_features:
     x_validation[feature] = 0
 x_validation = x_validation[usable_features]
 
-gene_expression_ref = pd.read_csv(f"{DATA_BASE_PATH}/Full data files/Geneexpression (full).tsv", 
+gene_expression_ref = pd.read_csv(f"{DATA_ROOT}/Full data files/Geneexpression (full).tsv", 
                                   sep="\t", header=0, index_col=0)
 expected_features = gene_expression_ref.columns.tolist()
 new_input = validation_dataset.copy()
@@ -127,7 +126,7 @@ print("="*80)
 
 rnn_model = load_model_from_checkpoint(
     checkpoint_path=f'{MODELS_BASE_PATH}/RNN/uncentered_data_RNN/signaling_model.v1.pt',
-    net_path=f'{DATA_BASE_PATH}/Full data files/network(full).tsv',
+    net_path=f'{DATA_ROOT}/Full data files/network(full).tsv',
     X_in_df=pd.DataFrame(x_validation),
     y_out_df=pd.DataFrame(y_validation),
     device='cpu',
@@ -177,15 +176,6 @@ with torch.no_grad():
     test_out = rnn_model(torch.randn(1, 1197).to(device)) # Random noise input
     # If this runs without error, the forward pass is safe.
     print("✓ Forward pass check passed.")
-
-# ... [Continue to Compute RNN SHAP] ...
-
-
-
-
-
-
-
 
 
 # ============================================================================
