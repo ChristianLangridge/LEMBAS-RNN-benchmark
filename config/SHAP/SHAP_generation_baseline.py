@@ -1,32 +1,31 @@
-"""
-Gene-Specific SHAP Value Generation - FINAL VERSION WITH DEEPEXPLAINER
-=======================================================================
-
-COMPLETE IMPLEMENTATION:
-- MLR: LinearExplainer (exact, analytical)
-- XGBRF: TreeExplainer (exact, fast) with batch extraction
-- RNN: DeepExplainer (gradient-based, ~50x faster than KernelExplainer)
-
-Expected runtime:
-- MLR: ~20 seconds per gene
-- XGBRF: ~90 seconds per gene  
-- RNN: ~60-90 seconds per gene (vs. 30-60 minutes with KernelExplainer!)
-- Total: ~4-5 minutes for all 3 models × 2 genes
-"""
-
 import numpy as np
 import pandas as pd
 import torch
 import joblib
 import shap
-import json
 import sys
-import os
 import gc
 from pathlib import Path
 from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
+import os
+import sys
+import json
+
+# Resolve REPO_ROOT and DATA_ROOT
+# Works whether the script is run directly (python script.py) 
+# or via %run from a notebook
+if 'REPO_ROOT' not in dir():
+    _root = next(p for p in Path(__file__).resolve().parents if (p / "README.md").exists())
+    REPO_ROOT = str(_root)
+
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+if 'DATA_ROOT' not in dir():
+    with open(Path(REPO_ROOT) / "data_config.json", "r") as f:
+        DATA_ROOT = json.load(f)["DATA_ROOT"]
 
 sys.path.append(f"{REPO_ROOT}/config/SHAP/")
 from RNN_reconstructor import load_model_from_checkpoint

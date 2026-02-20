@@ -5,6 +5,23 @@ import shap
 import os
 from dataclasses import dataclass, field
 from typing import Dict, List
+import sys
+import json
+from pathlib import Path
+
+# Resolve REPO_ROOT and DATA_ROOT
+# Works whether the script is run directly (python script.py) 
+# or via %run from a notebook
+if 'REPO_ROOT' not in dir():
+    _root = next(p for p in Path(__file__).resolve().parents if (p / "README.md").exists())
+    REPO_ROOT = str(_root)
+
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+if 'DATA_ROOT' not in dir():
+    with open(Path(REPO_ROOT) / "data_config.json", "r") as f:
+        DATA_ROOT = json.load(f)["DATA_ROOT"]
 
 # --- 1. Your Defined Constants & Style ---
 MODEL_COLORS = {
