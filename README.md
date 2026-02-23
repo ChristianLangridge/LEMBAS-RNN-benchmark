@@ -2,6 +2,7 @@
 [![License: BSD-3](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg?style=flat-square)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue?style=flat-square&logo=python)](https://www.python.org/)
 [![Data Requests](https://img.shields.io/badge/data_requests-zcbtcl9%40ucl.ac.uk-informational?style=flat-square&logo=gmail)](https://github.com/ChristianLangridge)
+[![CI](https://github.com/ChristianLangridge/LEMBAS-RNN-benchmark/actions/workflows/ci.yml/badge.svg)](https://github.com/ChristianLangridge/LEMBAS-RNN-benchmark/actions/workflows/ci.yml)
 
 A benchmarking framework for evaluating a novel biologically-informed RNN architecture [LEMBAS-RNN](https://github.com/czhang0701/DLBionet) designed by Li *et al*, 2025 [UNPUBLISHED] against standard regression baseline models to predict target gene expression from transcription factor (TF) expression values in human liver tissue (bulk-RNA-seq).
 
