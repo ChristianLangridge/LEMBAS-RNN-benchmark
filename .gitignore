@@ -210,7 +210,6 @@ __marimo__/
 Zhang Lab Data/
 data/
 results/
-*.tsv
 *.fa
 *.h5
 *.csv
