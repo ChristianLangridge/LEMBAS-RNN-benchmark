@@ -1,0 +1,78 @@
+# ============================================================================
+# CI: Unit Test Suite
+# ============================================================================
+# Runs on every push and pull request to main.
+# Only unit tests are run — integration tests require real data files
+# which are not available on the CI machine (by design).
+#
+# To run locally:
+#   pytest test/unit/ -v --tb=short
+# ============================================================================
+
+name: Unit Tests
+
+"on":
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  unit-tests:
+    name: pytest (Python 3.12, ubuntu-latest)
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # -----------------------------------------------------------------------
+      # 1. Check out the repository onto the CI machine
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # 2. Install Python 3.12 (matches repo requirement)
+      # -----------------------------------------------------------------------
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # -----------------------------------------------------------------------
+      # 3. Cache pip dependencies so repeat runs are fast (~30s vs ~3min)
+      # -----------------------------------------------------------------------
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('dep/lembasrnn_benchmark.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # -----------------------------------------------------------------------
+      # 4. Install only what the unit tests need
+      #    (no conda, no GPU, no SHAP — unit tests are hermetically sealed)
+      # -----------------------------------------------------------------------
+      - name: Install test dependencies
+        run: |
+          pip install --upgrade pip --quiet
+          pip install \
+            numpy \
+            pandas \
+            scipy \
+            scikit-learn \
+            xgboost \
+            torch --index-url https://download.pytorch.org/whl/cpu \
+            pytest \
+            pytest-timeout \
+            --quiet
+
+      # -----------------------------------------------------------------------
+      # 5. Run unit tests only
+      #    -v           : verbose output (each test name visible in logs)
+      #    --tb=short   : short tracebacks (readable in GitHub Actions log)
+      #    --timeout=60 : matches pytest.ini — kill any test taking > 60s
+      # -----------------------------------------------------------------------
+      - name: Run unit tests
+        run: |
+          pytest test/unit/ -v --tb=short --timeout=60
