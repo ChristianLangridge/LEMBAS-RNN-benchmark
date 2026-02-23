@@ -45,7 +45,11 @@ LEMBAS-RNN is made of separate modules:
 
 **Key Designs**
 
-*Add here if desired*
+**Projection input unit** - scales `network.tsv` with expression data to create a biologically-informed graph input in latent space for DL training  
+
+**Bionet signaling network** - the RNN engine iteratively updates node states in the graph, converging over time to a final output with respect to training parameters
+
+**Projection output layer** - extracts nnode states and applies linear transformation to predict target gene expression values as a final model output
 
 ---
 
@@ -79,7 +83,7 @@ All metrics computed on unseen validation set (262 samples, 16,100 target genes)
 
 ### config
 
-All scripts related to configuration on local machine for model predictions, figure generation, latency testing and SHAP integration.
+All scripts related to configuration of model predictions, figure generation, latency testing and SHAP integration on local machine.
 
 ### dep
 
@@ -160,7 +164,7 @@ Before running scripts, modify the data_config.json file with the absolute path 
 
 ```python
 {
-    "DATA_ROOT": "/home/christianl/LEMBAS-RNN-benchmark/Zhang Lab Data"
+    "DATA_ROOT": "/path/to/your/data/directory"
 }
 ```
 
