@@ -169,7 +169,7 @@ Before running scripts, modify the data_config.json file with the absolute path 
 All models share the same preprocessing boilerplate. Run this first to generate `x_train`, `x_test`, `y_train`, `y_test`:
 
 ```python
-%run 'benchmarking/data preprocessing/model_boilerplate_remote.py'
+%run "$REPO_ROOT/run/data preprocessing/model_boilerplate_remote.py"
 ```
 
 This script:
@@ -181,12 +181,12 @@ This script:
 
 **MLR:**
 ```bash
-jupyter notebook "benchmarking/model scripts/MLR/MLR.ipynb"
+jupyter notebook "run/model scripts/MLR/MLR.ipynb"
 ```
 
 **XGBRF** (trains 16,100 targets in batches of 1,000 — expect ~20–60 min on a multi-core machine):
 ```bash
-jupyter notebook "benchmarking/model scripts/XGBRF/XGBRF.ipynb"
+jupyter notebook "run/model scripts/XGBRF/XGBRF.ipynb"
 ```
 
 ### 4. Loading and Testing the RNN
@@ -194,31 +194,32 @@ jupyter notebook "benchmarking/model scripts/XGBRF/XGBRF.ipynb"
 The RNN is loaded from a saved checkpoint using `load_model_from_checkpoint()`:
 
 ```python
-from benchmarking.model_scripts.LEMBAS_RNN.RNN_reconstructor import load_model_from_checkpoint
+sys.path.insert(0, f"{REPO_ROOT}/run/model scripts/LEMBAS-RNN/")
+from RNN_reconstructor import load_model_from_checkpoint
 
-model = load_model_from_checkpoint(
-    checkpoint_path='path/to/signaling_model.v1.pt',
-    net_path='path/to/network(full).tsv',
-    X_in_df=x_test_df,
-    y_out_df=y_test_df,
+rnn_model = load_model_from_checkpoint(
+    checkpoint_path=f'{MODELS_BASE_PATH}/RNN/uncentered_data_RNN/signaling_model.v1.pt',
+    net_path=f'{DATA_ROOT}/Full data files/network(full).tsv',
+    X_in_df=pd.DataFrame(x_validation),
+    y_out_df=pd.DataFrame(y_validation),
     device='cpu',
     use_exact_training_params=True
 )
 ```
 
-Full inference walkthrough is in `benchmarking/model scripts/LEMBAS-RNN/RNN_testing.ipynb`.
+Full inference walkthrough is in `run/model scripts/LEMBAS-RNN/RNN_reconstructor.py`.
 
 ### 5. Generating Benchmark Figures
 
 ```bash
 # Training set fit (Fig 1A/B)
-jupyter notebook "benchmarking/figures/Model-fitting/Fig1(fitting).ipynb"
+jupyter notebook "run/figures/Model-fitting/Fig1(fitting).ipynb"
 
 # Test set performance (Fig 2A)
-jupyter notebook "benchmarking/figures/Model-testing/Fig1.ipynb"
+jupyter notebook "run/figures/Model-testing/Fig1.ipynb"
 
 # External validation (Fig 3A)
-jupyter notebook "benchmarking/figures/Model-validation/Fig1(validation).ipynb"
+jupyter notebook "run/figures/Model-validation/Fig1(validation).ipynb"
 ```
 
 ### 6. Generating Predictions Programmatically
