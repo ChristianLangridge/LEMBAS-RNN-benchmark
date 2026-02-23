@@ -154,7 +154,17 @@ BRCA1       PTEN        -1
 
 ## Usage
 
-### 1. Data Preprocessing
+### 1. Modifying `data_config.json`
+
+Before running scripts, modify the data_config.json file with the absolute path to the data folder requested via email badge. 
+
+```python
+{
+    "DATA_ROOT": "/home/christianl/LEMBAS-RNN-benchmark/Zhang Lab Data"
+}
+```
+
+### 2. Data Preprocessing
 
 All models share the same preprocessing boilerplate. Run this first to generate `x_train`, `x_test`, `y_train`, `y_test`:
 
@@ -167,7 +177,7 @@ This script:
 - Filters TFs to those present in the biological network (ensures all models use identical features)
 - Applies an 80/20 train/test split with `random_state=888`
 
-### 2. Training the Baseline Models
+### 3. Training the Baseline Models
 
 **MLR:**
 ```bash
@@ -179,7 +189,7 @@ jupyter notebook "benchmarking/model scripts/MLR/MLR.ipynb"
 jupyter notebook "benchmarking/model scripts/XGBRF/XGBRF.ipynb"
 ```
 
-### 3. Loading and Testing the RNN
+### 4. Loading and Testing the RNN
 
 The RNN is loaded from a saved checkpoint using `load_model_from_checkpoint()`:
 
@@ -198,7 +208,7 @@ model = load_model_from_checkpoint(
 
 Full inference walkthrough is in `benchmarking/model scripts/LEMBAS-RNN/RNN_testing.ipynb`.
 
-### 4. Generating Benchmark Figures
+### 5. Generating Benchmark Figures
 
 ```bash
 # Training set fit (Fig 1A/B)
@@ -211,7 +221,7 @@ jupyter notebook "benchmarking/figures/Model-testing/Fig1.ipynb"
 jupyter notebook "benchmarking/figures/Model-validation/Fig1(validation).ipynb"
 ```
 
-### 5. Generating Predictions Programmatically
+### 6. Generating Predictions Programmatically
 
 ```bash
 python config/predictions/model_train_test_predictions.py
