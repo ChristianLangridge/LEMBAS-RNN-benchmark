@@ -305,9 +305,6 @@ RuntimeError: size mismatch for input_layer.weights
 
 **Workaround:** Either retrain the RNN on new number of features (recommended for reproducibility) using a new, aligned network file, or filter only inputs that match `network(full).tsv` and fill missing feature columnns with zero values. See `RNN_testing.ipynb` Step 6 for a full diagnostic.
 
-### ⚠️ No Automated Test Suite
-There is currently no `tests/` directory or CI pipeline. Unit and integration tests are planned.
-
 ### RNN SHAP is Slow
 GradientExplainer on the full RNN is computationally expensive due to the iterative steady-state forward pass. With 2 x NVIDIA GeForce RTX-5080 GPUs, runtime for all 262 samples was around 4 minutes. This is will be much slower on CPU. 
 
