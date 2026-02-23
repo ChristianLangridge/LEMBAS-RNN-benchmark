@@ -83,7 +83,7 @@ All metrics computed on unseen validation set (262 samples, 16,100 target genes)
 
 ### config/
 
-Includes all reusable configuration scripts, foudational for the `run` directory. 
+Includes all reusable configuration scripts to support `run/`: 
 
 `figures/` - contains all model performance figure plotting and functions. 
 
@@ -92,9 +92,6 @@ Includes all reusable configuration scripts, foudational for the `run` directory
 `predictions/` - contrains all scripts for the model fitting/prediction pipeline on training data, held-out data and unseen validation data.
 
 `SHAP/` - contains all scripts SHAP pipeline for *ALB* and *AFP* predictions for all model architectures. 
-
-
-configuration of model predictions, figure generation, latency testing and SHAP integration on local machine.
 
 ### dep/
 
@@ -106,7 +103,7 @@ Includes all documentation relevant to the design of LEMBAS-RNN (Li *et al*, 202
 
 ### run/
 
-All scripts related to the running of the `config/` directory, including model training/initialisation, benchmarking framework and figure generation.
+All scripts call from `config/` directory, including model training/initialisation, benchmarking framework and figure generation.
 
 ### test/
 
