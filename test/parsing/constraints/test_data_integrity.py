@@ -31,8 +31,9 @@ import pandas as pd
 import pytest
 from pathlib import Path
 
-pytestmark = pytest.mark.integration
 
+# extends timeount threshold to 300s/5min to accomodate longer wait to load heavy data files
+pytestmark = pytest.mark.timeout(300)
 
 # ---------------------------------------------------------------------------
 # Expected data shapes (from README.md and production notebook outputs)
