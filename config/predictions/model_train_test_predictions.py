@@ -22,7 +22,7 @@ if 'DATA_ROOT' not in dir():
     with open(Path(REPO_ROOT) / "data_config.json", "r") as f:
         DATA_ROOT = json.load(f)["DATA_ROOT"]
 
-sys.path.insert(0, f"{REPO_ROOT}/config/SHAP/")
+sys.path.insert(0, f"{REPO_ROOT}/run/model scripts/LEMBAS-RNN/")
 from RNN_reconstructor import load_model_from_checkpoint
 
 print("Loading data...")
