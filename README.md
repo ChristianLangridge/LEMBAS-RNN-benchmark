@@ -136,20 +136,6 @@ This repository does **NOT** include the required data files (too large for vers
 | `network(full).tsv` | Biological regulatory network (TF, Gene, Interaction) | ~1,153,904 × 3 |
 | `Liver_bulk_external.tsv` | External validation cohort | ~262 x 16,100 |
 
-
-### Setting Up Data Paths
-
-> ⚠️ **Current Limitation:** Data paths are currently hardcoded to the original development machine. Before running any scripts, you will need to update the paths in each script to point to your local copies of the data files. This is a known issue — a centralised `config/paths.py` with environment variable support is planned (see [Known Issues](#known-issues--limitations)).
-
-**Quick fix** — search for and replace all instances of the base path:
-
-```bash
-# Find all hardcoded path references
-grep -r "/home/christianl/Zhang-Lab" . --include="*.py" -l
-
-# Then update each file to point to your data directory
-```
-
 ### Network File Format
 
 `network(full).tsv` must have exactly these three columns:
@@ -263,9 +249,6 @@ SHAP outputs are saved as `.npz` files containing per-gene SHAP arrays, expected
 ---
 
 ## Known Issues & Limitations
-
-### ⚠️ Hardcoded Absolute Paths
-All scripts currently use absolute paths specific to the original development machine (`/home/christianl/Zhang-Lab/...`). A centralised `config/paths.py` with environment variable support is the planned fix. Until then, you must manually update paths before running any script.
 
 ### ⚠️ Feature Count Importance (1197 TFs and 16,100 target genes)
 The saved RNN checkpoint was trained on 1,197 TF features and 16,100 target genes and the `network(full).tsv` file is alligned with that. Loading the checkpoint against a different network file or with different input dimensions will raise:
