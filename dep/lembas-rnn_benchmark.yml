@@ -321,6 +321,7 @@ dependencies:
       - nvidia-nvjitlink-cu12==12.8.93
       - nvidia-nvshmem-cu12==3.4.5
       - nvidia-nvtx-cu12==12.8.90
+      - pytest-timeout==2.4.0
       - torch==2.10.0+cu128
       - torchaudio==2.10.0+cu128
       - torchvision==0.25.0+cu128

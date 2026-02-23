@@ -50,9 +50,10 @@ METRIC_BOUNDS = {
 # Fixtures
 # ---------------------------------------------------------------------------
 
+# original "model_predictions_uncentered_v1.npz" file is 4.64GB so needed to get a smaller subset file "mock_data.npz" to run this test 
 @pytest.fixture(scope="module")
 def saved_predictions_path(data_root):
-    p = data_root / "Saved predictions" / "model_predictions_uncentered_v1.npz"
+    p = data_root / "Saved predictions" / "mock_data.npz" 
     if not p.exists():
         pytest.skip(f"Saved predictions not found at {p}. Run the prediction pipeline first.")
     return p
