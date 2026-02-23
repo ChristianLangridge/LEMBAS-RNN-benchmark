@@ -107,7 +107,19 @@ All scripts call from `config/` directory, including model training/initialisati
 
 ### test/
 
-Includes all unit/integration testing so far. More are planned.
+Includes all unit/integration testing, conducted using pytest. 
+
+`test_metrics.py` - testing `compute_metrics()` and `compute_metrics_per_gene()` as all figures generated using these functions. 
+
+`test_preprocessing.py` - verifying column ordering, that `usable_features` is a list not a set, that `random_state=888` is byte-identical for reruns for reproducibility.
+
+`test_shap_utils.py` - verifying `extract_xgbrf_model_from_batches()` works with XGBRF batched training and SHAP value generation accomodates this. 
+
+`test_path_resolution.py` - testing if another `READ.md` file breaks `REPO_ROOT` path finding system and `DATA_ROOT` path system from `data_config.json`.
+
+`test_data_integrity.py` - validating `network(full).tsv` has exact columns the pipeline expects with exact `{1,-1}` interaction values expected. 
+
+`test_pipeline_parity.py` - validating `.npz` artefacts without re-running training or predictions, catches ordering bug if `y_train_columns` do not match actual column order expectation. Also tests for NaN propagation and adds a soft regression guard on performance metrics if a model version is swapped in future before figure generation step. 
 
 ---
 
@@ -185,13 +197,22 @@ Run this from a notebook cell:
 ```python
 %run "$REPO_ROOT/run/data preprocessing/model_boilerplate_remote.py"
 ```
-
 This script:
 - Loads TF and gene expression data
 - Filters TFs to those present in the biological network (ensures all models use identical features)
 - Applies an 80/20 train/test split with `random_state=888`
+  
+### 2. Sanity checking with `test/`
 
-### 3. Training the Baseline Models
+Run pytest folder checks on example data to ensure formatting is correct before more committed tasks like model training. See `pytest.ini` for unit-specific or integration-specific testing. 
+
+Run this from terminal:
+
+```bash
+pytest test/ 
+```
+
+### 4. Training the Baseline Models
 
 **MLR:**
 ```bash
@@ -203,7 +224,7 @@ jupyter notebook "run/model scripts/MLR/MLR.ipynb"
 jupyter notebook "run/model scripts/XGBRF/XGBRF.ipynb"
 ```
 
-### 4. Loading and Testing the RNN
+### 5. Loading and Testing the RNN
 
 The RNN is loaded from a saved checkpoint using `load_model_from_checkpoint()`:
 
@@ -223,7 +244,7 @@ rnn_model = load_model_from_checkpoint(
 
 Full inference walkthrough is in `run/model scripts/LEMBAS-RNN/RNN_reconstructor.py`.
 
-### 5. Generating Benchmark Figures
+### 6. Generating Benchmark Figures
 
 ```bash
 # Training set fit (Fig 1A/B)
@@ -236,7 +257,7 @@ jupyter notebook "run/figures/Model-testing/Fig1.ipynb"
 jupyter notebook "run/figures/Model-validation/Fig1(validation).ipynb"
 ```
 
-### 6. Generating Predictions Programmatically
+### 7. Generating Predictions Programmatically
 
 ```bash
 python config/predictions/model_train_test_predictions.py
@@ -292,6 +313,10 @@ GradientExplainer on the full RNN is computationally expensive due to the iterat
 
 **Workaround:** Lower the number of `RNN_BACKGROUND_SAMPLES`, `RNN_TEST_SAMPLES` and `RNN_N_SAMPLES` will make lessen computational overhead for use on CPU. 
 
+### Silent test hangs
+Implementation of `pytest-timeout` of 300s/5min to accomodate longer file load times as previous `test/` was bottlenecked by heavy files. 
+
+**Workaround:** If persistent, use `Control+C` kill command and add skips to specific tests mentioned in summary. 
 
 ---
 
