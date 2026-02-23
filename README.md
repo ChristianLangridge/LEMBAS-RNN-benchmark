@@ -81,23 +81,34 @@ All metrics computed on unseen validation set (262 samples, 16,100 target genes)
 
 ## Repository Structure
 
-### config
+### config/
 
-All scripts related to configuration of model predictions, figure generation, latency testing and SHAP integration on local machine.
+Includes all reusable configuration scripts, foudational for the `run` directory. 
 
-### dep
+`figures/` - contains all model performance figure plotting and functions. 
+
+`latency/` - contains all latency benchmarking functions and associated plotting. 
+
+`predictions/` - contrains all scripts for the model fitting/prediction pipeline on training data, held-out data and unseen validation data.
+
+`SHAP/` - contains all scripts SHAP pipeline for *ALB* and *AFP* predictions for all model architectures. 
+
+
+configuration of model predictions, figure generation, latency testing and SHAP integration on local machine.
+
+### dep/
 
 Includes .yml file with all dependencies used on development machine. 
 
-### doc 
+### doc/
 
 Includes all documentation relevant to the design of LEMBAS-RNN (Li *et al*, 2025) and the benchmarking framework (my rotational report, 2026).
 
-### run
+### run/
 
-All scripts related to the running of the benchmarking framework for data preprocessing, model training/initialisation and figure generation.
+All scripts related to the running of the `config/` directory, including model training/initialisation, benchmarking framework and figure generation.
 
-### test
+### test/
 
 Includes all unit/integration testing so far. More are planned.
 
@@ -162,7 +173,7 @@ BRCA1       PTEN        -1
 
 Before running scripts, modify the data_config.json file with the absolute path to the data folder requested via email badge. 
 
-```python
+```json
 {
     "DATA_ROOT": "/path/to/your/data/directory"
 }
@@ -170,7 +181,9 @@ Before running scripts, modify the data_config.json file with the absolute path 
 
 ### 2. Data Preprocessing
 
-All models share the same preprocessing boilerplate. Run this first to generate `x_train`, `x_test`, `y_train`, `y_test`:
+All models share the same preprocessing boilerplate. Run this first to generate `x_train`, `x_test`, `y_train`, `y_test`. 
+
+Run this from a notebook cell:
 
 ```python
 %run "$REPO_ROOT/run/data preprocessing/model_boilerplate_remote.py"
@@ -202,7 +215,7 @@ sys.path.insert(0, f"{REPO_ROOT}/run/model scripts/LEMBAS-RNN/")
 from RNN_reconstructor import load_model_from_checkpoint
 
 rnn_model = load_model_from_checkpoint(
-    checkpoint_path=f'{MODELS_BASE_PATH}/RNN/uncentered_data_RNN/signaling_model.v1.pt',
+    checkpoint_path=f"{DATA_ROOT}/Saved models/RNN/uncentered_data_RNN/signaling_model.v1.pt",
     net_path=f'{DATA_ROOT}/Full data files/network(full).tsv',
     X_in_df=pd.DataFrame(x_validation),
     y_out_df=pd.DataFrame(y_validation),
