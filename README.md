@@ -107,7 +107,7 @@ All scripts call from `config/` directory, including model training/initialisati
 
 ### test/
 
-Includes all unit/integration testing, conducted using pytest. 
+Includes all unit/integration testing, conducted using pytest. Testing is modular and can be run as a baseline, or iteratively in the case of a data swap, refactoring or before committing/pushing. 
 
 `test_metrics.py` - testing `compute_metrics()` and `compute_metrics_per_gene()` as all figures generated using these functions. 
 
