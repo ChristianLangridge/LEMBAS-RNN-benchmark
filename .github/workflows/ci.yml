@@ -45,13 +45,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('dep/lembasrnn_benchmark.yml') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('dep/lembas-rnn_benchmark.yml') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
       # -----------------------------------------------------------------------
-      # 4. Install only what the unit tests need
-      #    (no conda, no GPU, no SHAP — unit tests are hermetically sealed)
+      # 4a. Install all non-torch dependencies from PyPI
+      #     (torch is installed separately because it needs a custom index URL;
+      #      mixing --index-url into a single pip install redirects ALL packages
+      #      to PyTorch's wheel server, which doesn't host pandas/numpy/etc.)
       # -----------------------------------------------------------------------
       - name: Install test dependencies
         run: |
@@ -62,10 +64,16 @@ jobs:
             scipy \
             scikit-learn \
             xgboost \
-            torch --index-url https://download.pytorch.org/whl/cpu \
             pytest \
             pytest-timeout \
             --quiet
+
+      # -----------------------------------------------------------------------
+      # 4b. Install CPU-only torch separately with its own index URL
+      # -----------------------------------------------------------------------
+      - name: Install PyTorch (CPU-only)
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu --quiet
 
       # -----------------------------------------------------------------------
       # 5. Run unit tests only
