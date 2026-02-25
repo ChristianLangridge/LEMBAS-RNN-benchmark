@@ -226,3 +226,8 @@ results/
 
 # __pycache__
 __pycache__
+
+# .vscode set-up 
+.vscode/
+
+
