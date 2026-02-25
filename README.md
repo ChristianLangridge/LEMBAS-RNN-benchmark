@@ -326,6 +326,7 @@ This is an active research project. If you'd like to contribute:
 2. Create a feature branch (`git checkout -b feature/your-feature`)
 3. Commit your changes (`git commit -m 'Add: your feature'`)
 4. Push and open a Pull Request
+5. Add a dated, detailed comment/annotation in the `CHANGELOG.md` file of the change 
 
 Please ensure any new scripts avoid hardcoded paths and include basic inline documentation.
 
