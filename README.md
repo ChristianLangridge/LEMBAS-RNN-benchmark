@@ -100,7 +100,7 @@ Includes .yml file with all dependencies used on development machine.
 
 ### doc/
 
-Includes all documentation relevant to the design of LEMBAS-RNN (Li *et al*, 2025) and the benchmarking framework (my rotational report, 2026).
+Includes all documentation relevant to the benchmarking framework (my rotational report, 2026).
 
 ### run/
 
